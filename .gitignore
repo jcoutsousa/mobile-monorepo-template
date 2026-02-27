@@ -1,0 +1,79 @@
+# ─── OS ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ─── IDE ─────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.code-workspace
+
+# ─── Flutter / Dart ──────────────────────────────────────────
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/pubspec.lock
+!packages/**/pubspec.lock
+
+# ─── React Native / Node ────────────────────────────────────
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# ─── Kotlin / Gradle ────────────────────────────────────────
+**/.gradle/
+**/local.properties
+**/gradle-app.setting
+
+# ─── Swift / Xcode ──────────────────────────────────────────
+**/*.xcworkspace/
+**/xcuserdata/
+**/*.xcodeproj/xcuserdata/
+**/*.playground/
+
+# ─── Android ─────────────────────────────────────────────────
+**/android/.gradle/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+*.jks
+*.keystore
+**/key.properties
+
+# ─── iOS ─────────────────────────────────────────────────────
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/ServiceDefinitions.json
+
+# ─── Secrets ─────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.p12
+*.key
+credentials.json
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# ─── Coverage ────────────────────────────────────────────────
+**/coverage/
+**/lcov.info
+**/*.lcov
+
+# ─── Generated ──────────────────────────────────────────────
+**/*.g.dart
+**/*.freezed.dart
+**/*.mocks.dart

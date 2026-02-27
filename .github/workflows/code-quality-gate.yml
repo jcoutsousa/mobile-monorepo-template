@@ -1,0 +1,140 @@
+name: Code Quality Gate
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  quality-sweep:
+    name: Code Quality Sweep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed
+        run: |
+          files=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$files" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Detect which frameworks are affected
+          echo "has_dart=$(echo "$files" | grep -c '\.dart$' || true)" >> $GITHUB_OUTPUT
+          echo "has_ts=$(echo "$files" | grep -cE '\.(ts|tsx|js|jsx)$' || true)" >> $GITHUB_OUTPUT
+          echo "has_kotlin=$(echo "$files" | grep -cE '\.(kt|kts)$' || true)" >> $GITHUB_OUTPUT
+
+      # ─── Dart / Flutter checks ───────────────────────────
+      - name: Setup Flutter
+        if: steps.changed.outputs.has_dart != '0'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter analyze
+        if: steps.changed.outputs.has_dart != '0'
+        run: |
+          for dir in $(find apps packages -maxdepth 1 -name "flutter_*" -o -name "dart_*" 2>/dev/null); do
+            if [ -f "$dir/pubspec.yaml" ]; then
+              echo "::group::Analyzing $dir"
+              cd $dir && flutter pub get && flutter analyze --no-fatal-infos && cd -
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Dart unused imports check
+        if: steps.changed.outputs.has_dart != '0'
+        run: |
+          violations=""
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              unused=$(grep -n "^import " "$file" | head -50)
+              # Simple heuristic: flag files with >10 imports
+              count=$(echo "$unused" | wc -l)
+              if [ "$count" -gt 10 ]; then
+                violations="$violations\n⚠️ $file has $count imports — review for unused"
+              fi
+            fi
+          done <<< "$(echo "${{ steps.changed.outputs.files }}" | grep '\.dart$')"
+          if [ -n "$violations" ]; then
+            echo -e "::warning::Potential unused imports:$violations"
+          fi
+
+      # ─── TypeScript / React Native checks ────────────────
+      - name: Setup Node
+        if: steps.changed.outputs.has_ts != '0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: ESLint check
+        if: steps.changed.outputs.has_ts != '0'
+        run: |
+          for dir in $(find apps packages -maxdepth 1 \( -name "rn_*" -o -name "react_native_*" \) 2>/dev/null); do
+            if [ -f "$dir/package.json" ]; then
+              echo "::group::Linting $dir"
+              cd $dir && npm ci && npx eslint . --max-warnings 0 && cd -
+              echo "::endgroup::"
+            fi
+          done
+
+      # ─── Kotlin checks ──────────────────────────────────
+      - name: Setup Java
+        if: steps.changed.outputs.has_kotlin != '0'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Detekt check
+        if: steps.changed.outputs.has_kotlin != '0'
+        run: |
+          for dir in $(find apps packages -maxdepth 1 \( -name "kotlin_*" -o -name "kmp_*" \) 2>/dev/null); do
+            if [ -f "$dir/build.gradle.kts" ] || [ -f "$dir/build.gradle" ]; then
+              echo "::group::Detekt $dir"
+              cd $dir && ./gradlew detekt 2>/dev/null && cd - || echo "detekt not configured"
+              echo "::endgroup::"
+            fi
+          done
+
+      # ─── Cross-language quality checks ───────────────────
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Scanning for potential secrets in changed files..."
+          patterns='(api[_-]?key|api[_-]?secret|password|token|secret[_-]?key|private[_-]?key)\s*[:=]\s*["\x27][^"\x27]{8,}'
+          violations=$(grep -rnEi "$patterns" ${{ steps.changed.outputs.files }} 2>/dev/null || true)
+          if [ -n "$violations" ]; then
+            echo "::error::Potential hardcoded secrets detected:"
+            echo "$violations"
+            exit 1
+          fi
+          echo "No hardcoded secrets found"
+
+      - name: Check for TODO/FIXME in new code
+        run: |
+          echo "Checking for TODO/FIXME comments..."
+          todos=$(git diff origin/${{ github.base_ref }}...HEAD | grep "^+" | grep -iE "(TODO|FIXME|HACK|XXX)" || true)
+          if [ -n "$todos" ]; then
+            echo "::warning::New TODO/FIXME comments found in this PR:"
+            echo "$todos"
+          fi
+
+      - name: Check for duplicate constants
+        run: |
+          echo "Checking for potential duplicate constants..."
+          # Check for hardcoded color values repeated across files
+          colors=$(grep -rnE "(Color\(0x|Color\.fromARGB|#[0-9a-fA-F]{6})" ${{ steps.changed.outputs.files }} 2>/dev/null || true)
+          if [ -n "$colors" ]; then
+            dupes=$(echo "$colors" | awk -F: '{print $NF}' | sort | uniq -d)
+            if [ -n "$dupes" ]; then
+              echo "::warning::Potential duplicate color constants:"
+              echo "$dupes"
+            fi
+          fi

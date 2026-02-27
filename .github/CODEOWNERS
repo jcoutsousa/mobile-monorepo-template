@@ -1,0 +1,16 @@
+# Default owners for everything
+* @jcoutsousa
+
+# Framework-specific owners (customize per team)
+# apps/flutter_*  @flutter-team
+# apps/rn_*       @react-native-team
+# apps/kotlin_*   @kotlin-team
+
+# Shared packages require broader review
+# packages/       @platform-leads
+
+# Infrastructure changes require DevOps review
+# infrastructure/ @devops-team
+
+# CI/CD and GitHub config
+.github/ @jcoutsousa

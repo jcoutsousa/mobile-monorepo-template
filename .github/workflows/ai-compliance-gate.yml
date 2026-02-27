@@ -1,0 +1,118 @@
+name: AI Compliance Gate
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**/ai/**'
+      - '**/ml/**'
+      - '**/models/**'
+      - '**/*ai*'
+      - '**/*model*'
+      - '**/*inference*'
+      - '**/*prediction*'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect-ai-components:
+    name: Detect AI Components
+    runs-on: ubuntu-latest
+    outputs:
+      has-ai: ${{ steps.detect.outputs.has-ai }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect AI frameworks and patterns
+        id: detect
+        run: |
+          echo "Scanning for AI/ML components..."
+          patterns="tensorflow|pytorch|torch|transformers|langchain|openai|anthropic|google.generativeai|vertexai|huggingface|sklearn|scikit-learn|keras|onnx|mlflow|wandb|cohere"
+
+          ai_files=$(grep -rlEi "$patterns" apps/ packages/ 2>/dev/null || true)
+
+          if [ -n "$ai_files" ]; then
+            echo "has-ai=true" >> $GITHUB_OUTPUT
+            echo "AI components detected in:"
+            echo "$ai_files"
+          else
+            echo "has-ai=false" >> $GITHUB_OUTPUT
+            echo "No AI components detected — skipping compliance checks"
+          fi
+
+  ai-act-compliance:
+    name: EU AI Act Compliance Check
+    needs: detect-ai-components
+    if: needs.detect-ai-components.outputs.has-ai == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check risk classification documentation
+        run: |
+          echo "Checking for AI risk classification..."
+          found=false
+          for doc in "docs/ai-risk-classification.md" "docs/AI_RISK.md" "docs/risk-assessment.md"; do
+            if [ -f "$doc" ]; then
+              echo "✅ Risk classification found: $doc"
+              found=true
+              break
+            fi
+          done
+          if [ "$found" = false ]; then
+            echo "::warning::No AI risk classification document found. EU AI Act Art. 6 requires risk classification."
+            echo "Create one of: docs/ai-risk-classification.md, docs/AI_RISK.md, docs/risk-assessment.md"
+          fi
+
+      - name: Check data governance documentation
+        run: |
+          echo "Checking for data governance documentation..."
+          if ! find docs -name "*data*governance*" -o -name "*data*quality*" 2>/dev/null | grep -q .; then
+            echo "::warning::No data governance documentation found. EU AI Act Art. 10 requires documented data governance."
+          else
+            echo "✅ Data governance documentation found"
+          fi
+
+      - name: Check transparency requirements
+        run: |
+          echo "Checking for AI transparency/disclosure..."
+          patterns="(ai.?disclosure|transparency|ai.?notice|ai.?interaction)"
+          if grep -rlEi "$patterns" apps/ packages/ 2>/dev/null | grep -q .; then
+            echo "✅ AI transparency/disclosure patterns found"
+          else
+            echo "::warning::No AI transparency/disclosure patterns found. EU AI Act Art. 50 requires AI interaction disclosure."
+          fi
+
+      - name: Check human oversight mechanisms
+        run: |
+          echo "Checking for human oversight mechanisms..."
+          patterns="(human.?oversight|human.?in.?the.?loop|human.?review|override|kill.?switch|emergency.?stop)"
+          if grep -rlEi "$patterns" apps/ packages/ 2>/dev/null | grep -q .; then
+            echo "✅ Human oversight mechanisms found"
+          else
+            echo "::warning::No human oversight mechanisms found. EU AI Act Art. 14 requires human oversight for high-risk AI."
+          fi
+
+      - name: Check for bias assessment
+        run: |
+          echo "Checking for bias assessment tooling..."
+          patterns="(fairlearn|aequitas|aif360|bias.?assessment|demographic.?parity|equalized.?odds)"
+          if grep -rlEi "$patterns" apps/ packages/ 2>/dev/null | grep -q .; then
+            echo "✅ Bias assessment tooling found"
+          else
+            echo "::warning::No bias assessment tooling detected. EU AI Act Art. 10 requires bias monitoring."
+          fi
+
+      - name: Compliance summary
+        if: always()
+        run: |
+          echo "╔══════════════════════════════════════════╗"
+          echo "║   EU AI Act Compliance Summary           ║"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║ For full compliance audit, invoke:        ║"
+          echo "║ @eu-ai-act-auditor in Copilot Chat       ║"
+          echo "╚══════════════════════════════════════════╝"
