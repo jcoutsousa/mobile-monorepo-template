@@ -1,46 +1,54 @@
 ---
 name: spaghetti-code
 description: >
-  Detects and refactors spaghetti code including overly long functions, deeply
-  nested widget trees, mixed business/UI logic, excessive coupling, and god
-  classes. Improves code structure and maintainability.
+  Detects and refactors spaghetti code across multi-language mobile codebases.
+  Supports Flutter/Dart (long build methods, widget nesting, mixed concerns),
+  React Native/TypeScript (oversized components, prop drilling, mixed logic),
+  and Kotlin/Android (god activities, deep callback nesting, mixed concerns).
+  Improves code structure and maintainability per language's idiomatic patterns.
 ---
 
 # Spaghetti Code Skill
 
-Detect and refactor structural code issues that harm maintainability and readability.
+Detect and refactor structural code issues that harm maintainability and readability. This skill is **language-aware** and applies appropriate thresholds and refactoring strategies per language.
 
-## Step 1: Function Length Analysis
+## Language Detection
 
-### Find Long Functions (>50 lines)
+| File Extension | Language | UI Framework |
+|---------------|----------|-------------|
+| `.dart` | Dart | Flutter widgets |
+| `.ts`, `.tsx` | TypeScript | React Native components |
+| `.js`, `.jsx` | JavaScript | React Native components |
+| `.kt` | Kotlin | Jetpack Compose / Android Views |
 
-Scan all `.dart` files for functions and methods exceeding 50 lines of code (excluding comments and blank lines).
+---
 
-**Thresholds:**
+## Step 1: Function Length Analysis (All Languages)
+
+### Thresholds
+
 | Length | Severity | Action |
 |--------|----------|--------|
 | >100 lines | Critical | Must refactor |
 | 50-100 lines | Warning | Should refactor |
 | 30-50 lines | Info | Review for clarity |
 
-### Refactoring Strategy for Long Functions
+---
 
-1. **Identify logical sections** — look for comment blocks or blank lines that separate concerns
-2. **Extract methods** — each logical section becomes a named method
-3. **Name methods descriptively** — the name should explain WHAT, not HOW
-4. **Preserve the original method** as a high-level orchestrator
+## Dart / Flutter
 
+### Long Functions
+
+Scan all `.dart` files for functions and methods exceeding 50 lines (excluding comments and blank lines).
+
+#### Refactoring Strategy
 ```dart
 // Before: 120-line _handleSubmit method
 void _handleSubmit() {
-  // validation (20 lines)
-  // ...
-  // API call (30 lines)
-  // ...
-  // state update (25 lines)
-  // ...
-  // navigation (15 lines)
-  // ...
+  // validation (20 lines) ...
+  // API call (30 lines) ...
+  // state update (25 lines) ...
+  // navigation (15 lines) ...
 }
 
 // After: orchestrator + focused methods
@@ -52,25 +60,13 @@ void _handleSubmit() {
 }
 ```
 
-## Step 2: Widget Build Method Analysis
+### Long Build Methods (>100 lines)
 
-### Find Long Build Methods (>100 lines)
+Search pattern: `Widget build\(BuildContext context\)`
 
-Widget `build()` methods over 100 lines should be broken into smaller widgets.
-
-**Search pattern:**
-```
-Widget build\(BuildContext context\)
-```
-
-### Refactoring Strategy for Long Build Methods
-
-1. **Extract widget subtrees** into private widget methods or separate widget classes
-2. **Prefer separate widget classes** over private methods (better performance with const)
-3. **Name extracted widgets** by their purpose, not their structure
-
+#### Refactoring Strategy
 ```dart
-// Before: 150-line build method with nested Column > ListView > Cards
+// Before: 150-line build method
 
 // After:
 Widget build(BuildContext context) {
@@ -84,19 +80,25 @@ Widget build(BuildContext context) {
 }
 ```
 
-## Step 3: Nesting Depth Analysis
+Prefer separate widget classes over private methods (better performance with const).
 
-### Find Deep Nesting (>3 levels of indentation in logic, >5 in widgets)
+### Deep Widget Nesting (>5 levels)
 
-**Logic nesting (if/for/while):**
 ```dart
-// Bad: >3 levels
+// Bad: >5 levels without extraction
+Scaffold(body: SafeArea(child: Padding(child: Column(children: [Container(child: Row(...))]))))
+
+// Fix: extract subtrees into named widgets
+```
+
+### Deep Logic Nesting (>3 levels of if/for/while)
+
+```dart
+// Bad:
 if (condition1) {
   if (condition2) {
     for (var item in items) {
-      if (condition3) {
-        // 4 levels deep — too much
-      }
+      if (condition3) { /* 4 levels */ }
     }
   }
 }
@@ -109,97 +111,46 @@ for (var item in items) {
 }
 ```
 
-**Widget nesting:**
-```dart
-// Bad: >5 levels of widget nesting without extraction
-Scaffold(
-  body: SafeArea(
-    child: Padding(
-      child: Column(
-        children: [
-          Container(
-            child: Row(
-              children: [
-                Expanded(
-                  child: // 7 levels deep
-                )
-              ]
-            )
-          )
-        ]
-      )
-    )
-  )
-)
+### Mixed Concerns
+
+#### Business Logic in UI Code
+Search for in widget files:
 ```
-
-## Step 4: Mixed Concerns Analysis
-
-### Business Logic in UI Code
-
-Search for these anti-patterns in widget files:
-
-```dart
-// API calls directly in widgets
 http.get(
 await apiClient.
 await repository.
-
-// Data transformation in build methods
 items.where(
 items.map(
 items.sort(
-
-// Complex calculations in widgets
-if (price * quantity * tax > threshold) {
-
-// State mutations in build methods (outside of callbacks)
-setState(() {
-  // complex logic here
-});
 ```
 
-**Fix:** Move business logic to ViewModel, Controller, or Service classes.
+**Fix:** Move to ViewModel, Controller, or Service classes.
 
-### UI Logic in Business Classes
-
-Search for these in service/viewmodel/repository files:
-
-```dart
-// UI framework imports in non-UI files
-import 'package:flutter/material.dart';  // in a service file
-import 'package:flutter/widgets.dart';   // in a repository file
-
-// Navigation in business logic
+#### UI Logic in Business Classes
+Search for in service/viewmodel/repository files:
+```
+import 'package:flutter/material.dart';   // in a service file
 Navigator.of(context)
-
-// Scaffold/SnackBar in business logic
 ScaffoldMessenger
-
-// BuildContext in service methods
-void doSomething(BuildContext context)
+BuildContext                              // in service method signatures
 ```
 
 **Fix:** Return data/state, let the UI layer handle presentation.
 
-## Step 5: God Class Detection
+### God Class Detection
 
-### Find Classes with Too Many Responsibilities
-
-**Indicators:**
-- Class has >500 lines
-- Class has >15 public methods
+Indicators:
+- Class >500 lines
+- Class >15 public methods
 - Class imports from >10 different files
-- Class name is vague (`Manager`, `Helper`, `Utils`, `Handler`)
+- Vague name: `Manager`, `Helper`, `Utils`, `Handler`
 
 **Fix:** Split into focused classes following Single Responsibility Principle.
 
-## Step 6: Excessive Coupling Detection
-
-### Find Tight Coupling
+### Excessive Coupling
 
 ```dart
-// Direct instantiation of dependencies (instead of injection)
+// Direct instantiation instead of injection
 final service = ApiService();  // in a widget
 
 // Long method chains
@@ -209,13 +160,352 @@ widget.parent.context.service.repository.method()
 // file_a.dart imports file_b.dart AND file_b.dart imports file_a.dart
 ```
 
-## Step 7: Apply Fixes
+### Dart Validation
+```
+flutter analyze   -- no new errors
+flutter test      -- all tests pass
+```
 
-Priority order:
-1. **Critical**: Functions >100 lines, build methods >150 lines
-2. **High**: Mixed concerns (business logic in UI)
-3. **Medium**: Deep nesting, god classes
-4. **Low**: Minor coupling issues
+---
+
+## TypeScript / JavaScript (React Native)
+
+### Long Components (>100 lines of JSX/TSX)
+
+Scan all `.tsx` and `.jsx` files for component functions exceeding 100 lines.
+
+#### Refactoring Strategy
+```typescript
+// Before: 200-line HomeScreen component
+
+// After: orchestrator + sub-components
+const HomeScreen: React.FC = () => {
+  const { data, loading } = useHomeData();
+
+  return (
+    <View style={styles.container}>
+      <HeaderSection title={data.title} />
+      <ContentList items={data.items} />
+      <ActionBar onSubmit={handleSubmit} />
+    </View>
+  );
+};
+```
+
+### Long Hook Bodies (>50 lines)
+
+Custom hooks that contain too much logic.
+
+```typescript
+// Before: 80-line useAuth hook with mixed concerns
+
+// After: composed hooks
+function useAuth() {
+  const tokenManager = useTokenManager();
+  const sessionTracker = useSessionTracker();
+  const loginFlow = useLoginFlow(tokenManager);
+  return { ...loginFlow, session: sessionTracker.session };
+}
+```
+
+### Deep JSX Nesting (>5 levels)
+
+```typescript
+// Bad: deeply nested JSX
+<View>
+  <ScrollView>
+    <View>
+      <View>
+        <View>
+          <Text>Too deep</Text>
+        </View>
+      </View>
+    </View>
+  </ScrollView>
+</View>
+
+// Fix: extract into named components
+<View>
+  <ScrollView>
+    <ContentSection>
+      <DetailCard />
+    </ContentSection>
+  </ScrollView>
+</View>
+```
+
+### Deep Callback/Promise Nesting (>3 levels)
+
+```typescript
+// Bad: callback hell
+fetchUser().then(user => {
+  fetchPosts(user.id).then(posts => {
+    fetchComments(posts[0].id).then(comments => {
+      // 3+ levels deep
+    });
+  });
+});
+
+// Fix: async/await
+const user = await fetchUser();
+const posts = await fetchPosts(user.id);
+const comments = await fetchComments(posts[0].id);
+```
+
+### Mixed Concerns
+
+#### Business Logic in Components
+Search for in `.tsx`/`.jsx` files:
+```typescript
+// API calls directly in components (outside hooks)
+fetch(
+axios.
+api.
+
+// Data transformation in render
+items.filter(
+items.map(          // complex mapping, not JSX rendering
+items.sort(
+items.reduce(
+
+// Complex calculations in render
+if (price * quantity * tax > threshold) {
+```
+
+**Fix:** Move to custom hooks, services, or utility functions.
+
+#### UI Logic in Services/Utils
+Search for in non-component files:
+```typescript
+import.*from ['"]react-native['"]   // in a service file
+Alert.alert                          // in a utility file
+navigation.navigate                  // in a data layer file
+StyleSheet                          // in a business logic file
+```
+
+**Fix:** Return data, let components handle presentation.
+
+### Prop Drilling Detection
+
+Search for props passed through 3+ component levels without being used:
+
+```typescript
+// Bad: prop drilling through intermediary components
+<Parent user={user}>        // passes to Child
+  <Child user={user}>       // passes to GrandChild
+    <GrandChild user={user} /> // actually uses it
+  </Child>
+</Parent>
+
+// Fix: Context, state management, or composition
+```
+
+### God Component Detection
+
+Indicators:
+- Component file >300 lines
+- Component manages >5 pieces of state (`useState` calls)
+- Component has >10 event handler functions
+- Component renders >3 distinct UI sections
+
+**Fix:** Split into container/presentation pattern or compose from smaller components.
+
+### TypeScript Validation
+```
+npx eslint . --ext .ts,.tsx,.js,.jsx   -- no new errors
+npx tsc --noEmit                       -- no type errors
+npx jest --passWithNoTests             -- all tests pass
+```
+
+---
+
+## Kotlin / Android
+
+### Long Functions
+
+Scan all `.kt` files for functions exceeding 50 lines (excluding comments and blank lines).
+
+#### Refactoring Strategy
+```kotlin
+// Before: 100-line handleLogin function
+fun handleLogin(email: String, password: String) {
+    // validation (15 lines) ...
+    // API call (25 lines) ...
+    // token storage (15 lines) ...
+    // navigation (10 lines) ...
+}
+
+// After: orchestrator + focused functions
+fun handleLogin(email: String, password: String) {
+    validateCredentials(email, password)
+    val token = authenticateUser(email, password)
+    storeToken(token)
+    navigateToHome()
+}
+```
+
+### Long Composable Functions (>80 lines)
+
+Search pattern: `@Composable\s+fun\s+`
+
+#### Refactoring Strategy
+```kotlin
+// Before: 150-line HomeScreen composable
+
+// After:
+@Composable
+fun HomeScreen(viewModel: HomeViewModel = hiltViewModel()) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    Column {
+        HeaderSection(title = uiState.title)
+        ContentList(items = uiState.items)
+        ActionBar(onSubmit = viewModel::handleSubmit)
+    }
+}
+```
+
+### Deep Nesting (>3 levels of logic, >5 levels of Compose)
+
+#### Logic Nesting
+```kotlin
+// Bad:
+if (condition1) {
+    when (state) {
+        is State.Loading -> {
+            if (retryCount < maxRetries) {
+                // 4 levels deep
+            }
+        }
+    }
+}
+
+// Fix: early returns and when expressions
+if (!condition1) return
+when (state) {
+    is State.Loading -> handleLoading(retryCount)
+    is State.Error -> handleError(state.error)
+    is State.Success -> handleSuccess(state.data)
+}
+```
+
+#### Compose Nesting
+```kotlin
+// Bad: deeply nested composables
+Scaffold {
+    Column {
+        Card {
+            Row {
+                Column {
+                    Box {
+                        Text("Too deep")  // 6+ levels
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Fix: extract into named composables
+Scaffold {
+    Column {
+        UserInfoCard(user = user)
+    }
+}
+```
+
+### Mixed Concerns
+
+#### Business Logic in UI Layer
+Search for in Activity/Fragment/Composable files:
+```kotlin
+// API calls in UI
+repository.
+apiService.
+retrofit.
+Room
+
+// Data processing in composables
+items.filter {
+items.sortedBy {
+items.groupBy {
+
+// SharedPreferences in UI
+getSharedPreferences
+```
+
+**Fix:** Move to ViewModel or UseCase classes.
+
+#### UI Logic in Data Layer
+Search for in repository/service files:
+```kotlin
+import android.widget.            // in data layer
+import androidx.compose.           // in data layer
+import android.app.Activity        // in data layer
+Toast.makeText                     // in repository
+context.startActivity              // in data layer
+```
+
+**Fix:** Return data/state, let the UI layer handle presentation.
+
+### God Activity/Fragment/ViewModel Detection
+
+Indicators:
+- Class >500 lines
+- ViewModel with >10 public methods or >8 StateFlow/LiveData fields
+- Activity/Fragment handling >5 distinct features
+- Class name is generic: `MainViewModel`, `BaseManager`, `AppHelper`
+
+**Fix:** Split into feature-specific ViewModels, use composition over inheritance.
+
+### Callback Hell in Coroutines
+
+```kotlin
+// Bad: nested callbacks even with coroutines
+viewModelScope.launch {
+    val user = withContext(Dispatchers.IO) {
+        val response = api.getUser()
+        if (response.isSuccessful) {
+            val profile = withContext(Dispatchers.Default) {
+                processProfile(response.body()!!)
+            }
+            profile
+        } else { null }
+    }
+}
+
+// Fix: flatten with sequential suspend calls
+viewModelScope.launch {
+    val response = userRepository.getUser()
+    val profile = profileProcessor.process(response)
+    _uiState.value = UiState.Success(profile)
+}
+```
+
+### Kotlin Validation
+```
+./gradlew lint                   -- no new issues
+./gradlew compileDebugKotlin     -- compiles successfully
+./gradlew test                   -- all tests pass
+```
+
+---
+
+## Cross-Language Rules
+
+### Priority Order (All Languages)
+
+1. **Critical**: Functions >100 lines, UI build/render methods >150 lines
+2. **High**: Mixed concerns (business logic in UI layer)
+3. **Medium**: Deep nesting, god classes/components
+4. **Low**: Minor coupling issues, prop drilling
+
+### Refactoring Principles (All Languages)
+
+- **Extract, do not rewrite** -- preserve behavior while improving structure
+- **Name by purpose** -- method/component names should explain WHAT, not HOW
+- **Preserve the orchestrator** -- the original function becomes a high-level coordinator
+- **One responsibility per extraction** -- each extracted unit does one thing
+- **Test before and after** -- verify behavior is preserved
 
 ## Output Format
 
@@ -223,29 +513,62 @@ Priority order:
 ## Spaghetti Code Audit
 
 ### Summary
-- **Long functions found**: [count] (>[50 lines])
-- **Long build methods found**: [count] (>[100 lines])
-- **Deep nesting found**: [count] (>[3 levels])
-- **Mixed concerns found**: [count]
-- **God classes found**: [count]
+- **Apps scanned**: [count]
+- **Languages**: [list]
+- **Long functions found**: [count per language]
+- **Long UI methods found**: [count per language]
+- **Deep nesting found**: [count per language]
+- **Mixed concerns found**: [count per language]
+- **God classes/components found**: [count per language]
 
-### Refactored Functions
+### Dart / Flutter -- [app name]
 
+#### Refactored Functions
 | File | Method | Before | After | Extraction |
 |------|--------|--------|-------|------------|
 | lib/views/settings.dart | build() | 180 lines | 45 lines | 4 sub-widgets |
 | lib/services/auth.dart | login() | 85 lines | 30 lines | 3 helper methods |
 
-### Mixed Concerns Fixed
-
+#### Mixed Concerns Fixed
 | File | Issue | Fix |
 |------|-------|-----|
 | lib/views/home.dart:45 | API call in build() | Moved to ViewModel |
-| lib/services/api.dart:23 | Navigator in service | Returns result, UI navigates |
 
-### Nesting Reduced
+### TypeScript / React Native -- [app name]
 
-| File | Method | Before | After | Technique |
-|------|--------|--------|-------|-----------|
-| lib/utils/parser.dart:67 | parse() | 5 levels | 2 levels | Early returns |
+#### Refactored Components
+| File | Component | Before | After | Extraction |
+|------|-----------|--------|-------|------------|
+| src/screens/Home.tsx | HomeScreen | 250 lines | 60 lines | 4 sub-components |
+| src/hooks/useAuth.ts | useAuth | 80 lines | 25 lines | 3 composed hooks |
+
+#### Mixed Concerns Fixed
+| File | Issue | Fix |
+|------|-------|-----|
+| src/screens/Profile.tsx:30 | fetch() in render | Moved to useProfileData hook |
+
+#### Prop Drilling Fixed
+| Prop | Levels Deep | Fix |
+|------|-------------|-----|
+| user | 4 | Created UserContext |
+
+### Kotlin / Android -- [app name]
+
+#### Refactored Functions
+| File | Method | Before | After | Extraction |
+|------|--------|--------|-------|------------|
+| ui/HomeScreen.kt | HomeScreen() | 160 lines | 40 lines | 4 composables |
+| data/AuthRepository.kt | login() | 90 lines | 30 lines | 3 private functions |
+
+#### Mixed Concerns Fixed
+| File | Issue | Fix |
+|------|-------|-----|
+| ui/SettingsActivity.kt:45 | SharedPrefs in Activity | Moved to SettingsRepository |
+
+### Nesting Reduced (All Languages)
+| File | Language | Method | Before | After | Technique |
+|------|----------|--------|--------|-------|-----------|
+| lib/utils/parser.dart | Dart | parse() | 5 levels | 2 levels | Early returns |
+| src/utils/transform.ts | TypeScript | transform() | 4 levels | 2 levels | Async/await |
+| data/Mapper.kt | Kotlin | map() | 4 levels | 2 levels | When expression |
 ```
