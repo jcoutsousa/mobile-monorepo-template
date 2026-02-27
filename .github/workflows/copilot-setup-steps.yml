@@ -1,0 +1,94 @@
+name: "Copilot Setup Steps"
+
+# Configures the environment for the GitHub Copilot coding agent.
+# Runs automatically before Copilot starts working on any task.
+# See: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment
+
+on: workflow_dispatch
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Flutter setup ────────────────────────────────────────
+      - name: Detect Flutter apps
+        id: detect-flutter
+        run: |
+          if find apps packages -name "pubspec.yaml" 2>/dev/null | head -1 | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Flutter
+        if: steps.detect-flutter.outputs.found == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        if: steps.detect-flutter.outputs.found == 'true'
+        run: |
+          for dir in $(find apps packages -name "pubspec.yaml" -exec dirname {} \; 2>/dev/null); do
+            echo "Installing deps: $dir"
+            (cd "$dir" && flutter pub get)
+          done
+
+      # ── Node.js setup ────────────────────────────────────────
+      - name: Detect Node.js apps
+        id: detect-node
+        run: |
+          if find apps packages -name "package.json" -not -path "*/node_modules/*" 2>/dev/null | head -1 | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.detect-node.outputs.found == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Node dependencies
+        if: steps.detect-node.outputs.found == 'true'
+        run: |
+          for dir in $(find apps packages -name "package.json" -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null); do
+            echo "Installing deps: $dir"
+            (cd "$dir" && npm ci)
+          done
+
+      # ── JDK setup ────────────────────────────────────────────
+      - name: Detect Kotlin/Gradle apps
+        id: detect-kotlin
+        run: |
+          if find apps packages \( -name "build.gradle.kts" -o -name "build.gradle" \) 2>/dev/null | head -1 | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup JDK
+        if: steps.detect-kotlin.outputs.found == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      # ── Summary ──────────────────────────────────────────────
+      - name: Environment summary
+        run: |
+          echo "## Copilot Environment Ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Runtime | Detected | Version |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|----------|---------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Flutter | ${{ steps.detect-flutter.outputs.found }} | $(flutter --version 2>/dev/null | head -1 || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Node.js | ${{ steps.detect-node.outputs.found }} | $(node --version 2>/dev/null || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| JDK | ${{ steps.detect-kotlin.outputs.found }} | $(java --version 2>&1 | head -1 || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
