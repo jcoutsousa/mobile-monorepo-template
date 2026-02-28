@@ -171,8 +171,7 @@ jobs:
           echo "  - APP_STORE_CONNECT_KEY_ID"
           echo "  - APP_STORE_CONNECT_ISSUER_ID"
           echo ""
-          echo "Example fastlane command:"
-          echo "  fastlane pilot upload --ipa release/*.ipa"
+          echo "::error::iOS deploy step not implemented. This workflow does not perform a real deployment yet."
           exit 1
 
       - name: Summary
