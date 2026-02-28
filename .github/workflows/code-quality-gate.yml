@@ -105,17 +105,7 @@ jobs:
           done
 
       # ─── Cross-language quality checks ───────────────────
-      - name: Check for hardcoded secrets
-        run: |
-          echo "Scanning for potential secrets in changed files..."
-          patterns='(api[_-]?key|api[_-]?secret|password|token|secret[_-]?key|private[_-]?key)\s*[:=]\s*["\x27][^"\x27]{8,}'
-          violations=$(grep -rnEi "$patterns" ${{ steps.changed.outputs.files }} 2>/dev/null || true)
-          if [ -n "$violations" ]; then
-            echo "::error::Potential hardcoded secrets detected:"
-            echo "$violations"
-            exit 1
-          fi
-          echo "No hardcoded secrets found"
+      # Secret scanning handled by Security Gate (Trivy) — see security-gate.yml
 
       - name: Check for TODO/FIXME in new code
         run: |
@@ -127,10 +117,11 @@ jobs:
           fi
 
       - name: Check for duplicate constants
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
         run: |
           echo "Checking for potential duplicate constants..."
-          # Check for hardcoded color values repeated across files
-          colors=$(grep -rnE "(Color\(0x|Color\.fromARGB|#[0-9a-fA-F]{6})" ${{ steps.changed.outputs.files }} 2>/dev/null || true)
+          colors=$(echo "$CHANGED_FILES" | xargs grep -rnE "(Color\(0x|Color\.fromARGB|#[0-9a-fA-F]{6})" 2>/dev/null || true)
           if [ -n "$colors" ]; then
             dupes=$(echo "$colors" | awk -F: '{print $NF}' | sort | uniq -d)
             if [ -n "$dupes" ]; then

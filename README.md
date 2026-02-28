@@ -79,6 +79,7 @@ Every PR must pass before merge:
 |------|------|---------|--------------|
 | **CI Gate** | GitHub Action | Every push | Yes |
 | **Code Quality Sweep** | GitHub Action | Every PR | Yes |
+| **Security Scan** | GitHub Action (Trivy) | Every PR + push | Yes |
 | **Copilot Review** | Copilot Code Review | Every PR | Yes (via gate workflow) |
 | **AI Compliance** | GitHub Action | PRs touching AI code | Yes (if AI detected) |
 | **Code Quality Review** | Agentic Workflow | Every PR | Informational |
@@ -93,7 +94,11 @@ PR opened/updated
   │     └─ Auto-detects framework → runs lint + test + analyze
   │
   ├─→ Code Quality Gate (code-quality-gate.yml)
-  │     └─ Checks: secrets, duplicates, dead code, TODOs
+  │     └─ Checks: duplicates, dead code, TODOs, framework linters
+  │
+  ├─→ Security Gate (security-gate.yml)
+  │     └─ Trivy: vulnerabilities, secrets, misconfigs, licenses
+  │     └─ Results uploaded to GitHub Security tab (SARIF)
   │
   ├─→ Copilot Code Review (auto-requested via ruleset)
   │     └─ Reviews code using .github/copilot-instructions.md
