@@ -34,9 +34,9 @@ gh api repos/$REPO/rulesets \
   --field 'rules[][type]=required_status_checks' \
   --field 'rules[1][parameters][strict_required_status_checks_policy]=true' \
   --field 'rules[1][parameters][required_status_checks][][context]=CI Gate' \
-  --field 'rules[1][parameters][required_status_checks[][context]=Code Quality Sweep' \
-  --field 'rules[1][parameters][required_status_checks[][context]=Security Scan' \
-  --field 'rules[1][parameters][required_status_checks[][context]=Copilot Review Status' \
+  --field 'rules[1][parameters][required_status_checks][][context]=Code Quality Sweep' \
+  --field 'rules[1][parameters][required_status_checks][][context]=Security Scan' \
+  --field 'rules[1][parameters][required_status_checks][][context]=Copilot Review Status' \
   --field 'rules[][type]=deletion' \
   --field 'rules[][type]=non_fast_forward' \
   2>/dev/null && echo "✅ Ruleset created" || echo "⚠️  Ruleset creation via API failed — set up manually (see below)"
