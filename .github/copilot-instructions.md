@@ -1,6 +1,6 @@
-# Copilot Review Instructions — Mobile Monorepo
+# Copilot Review Instructions — Monorepo
 
-You are reviewing code in a mobile monorepo that may contain Flutter, React Native, Kotlin Multiplatform, or Swift projects.
+You are reviewing code in a monorepo that may contain projects in any language. Supported frameworks include Flutter, React Native, Kotlin, Swift, Python, and Go — but new frameworks can be added via the plugin system in `frameworks/`. Check `.github/instructions/` for language-specific review rules.
 
 ## General Rules
 

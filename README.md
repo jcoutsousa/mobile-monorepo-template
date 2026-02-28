@@ -1,8 +1,8 @@
-# Mobile Monorepo Template
+# Monorepo Template
 
-Template repository for mobile application development in monorepo architecture. Language-agnostic — supports Flutter, React Native, Kotlin Multiplatform, and Swift.
+Template repository for application development in monorepo architecture. Language-agnostic with a plugin system — add any framework by dropping a `.sh` file into `frameworks/`.
 
-Includes automated code quality enforcement and EU AI Act compliance checking via GitHub Copilot custom agents and agentic workflows.
+Ships with Flutter, React Native, Kotlin, Swift, Python, and Go. Includes automated code quality enforcement and EU AI Act compliance checking via GitHub Copilot custom agents and agentic workflows.
 
 ## Quick Start
 
@@ -11,64 +11,124 @@ Includes automated code quality enforcement and EU AI Act compliance checking vi
 Click **"Use this template"** on GitHub, or:
 
 ```bash
-gh repo create my-mobile-app --template jcoutsousa/mobile-monorepo-template --private
-cd my-mobile-app
+gh repo create my-app --template jcoutsousa/mobile-monorepo-template --private
+cd my-app
 ```
 
-### 2. Bootstrap your first app
+### 2. See available frameworks
 
 ```bash
-chmod +x scripts/bootstrap.sh
-./scripts/bootstrap.sh flutter myapp       # Flutter app
-./scripts/bootstrap.sh rn myapp            # React Native app
-./scripts/bootstrap.sh kotlin myapp        # Kotlin app
-./scripts/bootstrap.sh flutter utils --package  # Shared package
+./scripts/bootstrap.sh --list
 ```
 
-### 3. Set up branch protection
+### 3. Bootstrap your first app
 
 ```bash
-chmod +x scripts/setup-branch-protection.sh
+./scripts/bootstrap.sh flutter myapp           # Flutter app
+./scripts/bootstrap.sh react-native myapp      # React Native app
+./scripts/bootstrap.sh kotlin myapp            # Kotlin app
+./scripts/bootstrap.sh python ml-service       # Python service
+./scripts/bootstrap.sh go api-gateway          # Go service
+./scripts/bootstrap.sh flutter utils --package # Shared package
+```
+
+### 4. Set up branch protection
+
+```bash
 ./scripts/setup-branch-protection.sh owner/repo
 ```
 
 ## Structure
 
 ```
-├── apps/                         # Mobile applications
-│   ├── flutter_<name>/           # Flutter apps
-│   ├── rn_<name>/                # React Native apps
-│   ├── kotlin_<name>/            # Kotlin/KMP apps
-│   └── ios_<name>/               # Swift/iOS apps
+├── apps/                         # Applications (any framework)
+│   ├── flutter_<name>/
+│   ├── rn_<name>/
+│   ├── kotlin_<name>/
+│   ├── py_<name>/
+│   ├── go_<name>/
+│   └── ...
 │
 ├── packages/                     # Shared libraries
+│
+├── frameworks/                   # Framework plugins (the plugin system)
+│   ├── _template.sh              # Copy this to add a new framework
+│   ├── flutter.sh
+│   ├── react-native.sh
+│   ├── kotlin.sh
+│   ├── swift.sh
+│   ├── python.sh
+│   └── go.sh
 │
 ├── infrastructure/               # IaC (Terraform, K8s)
 │
 ├── docs/                         # Documentation
 │
-├── scripts/                      # Utility scripts
-│   ├── bootstrap.sh              # Create new app/package
-│   └── setup-branch-protection.sh # Configure GitHub rules
+├── scripts/
+│   ├── bootstrap.sh              # Create new app/package (reads from frameworks/)
+│   └── setup-branch-protection.sh
 │
 └── .github/
     ├── agents/                   # Copilot custom agents
-    │   ├── code-quality-sweep.agent.md
-    │   └── eu-ai-act-auditor.agent.md
     ├── skills/                   # Agent skills (19 total)
     ├── instructions/             # Code review rules per language
     │   ├── flutter.instructions.md
     │   ├── react-native.instructions.md
     │   ├── kotlin.instructions.md
+    │   ├── python.instructions.md
+    │   ├── go.instructions.md
     │   └── security.instructions.md
-    ├── copilot-instructions.md   # Repo-wide review instructions
+    ├── copilot-instructions.md
     └── workflows/
-        ├── ci-mobile.yml         # Auto-detect framework CI
-        ├── code-quality-gate.yml # Quality checks (required)
-        ├── ai-compliance-gate.yml # EU AI Act (conditional)
-        ├── copilot-review-gate.yml # Enforce Copilot findings
+        ├── ci-mobile.yml           # Dynamic framework CI (reads plugins)
+        ├── code-quality-gate.yml   # Quality checks (required)
+        ├── ai-compliance-gate.yml  # EU AI Act (conditional)
+        ├── copilot-review-gate.yml
         ├── code-quality-review.md  # Agentic Workflow
         └── ai-compliance-review.md # Agentic Workflow
+```
+
+## Plugin System
+
+Each framework is defined as a shell script in `frameworks/`. The bootstrap script, Makefile, and CI workflows all read from these plugins automatically.
+
+### Adding a new framework
+
+1. Copy the template:
+   ```bash
+   cp frameworks/_template.sh frameworks/myframework.sh
+   ```
+
+2. Edit the plugin — set the name, prefixes, detect file, commands, and scaffold function.
+
+3. Optionally add Copilot review instructions:
+   ```bash
+   # Create .github/instructions/myframework.instructions.md
+   ```
+
+That's it. The CI, Makefile, and bootstrap all pick it up automatically. No workflow modifications needed.
+
+### Plugin anatomy
+
+```bash
+# frameworks/myframework.sh
+
+FRAMEWORK_NAME="My Framework"              # Display name
+FRAMEWORK_PREFIXES=("myfw_")               # Directory prefixes for CI detection
+FRAMEWORK_DETECT_FILE="myfw.config"        # File that identifies projects
+FRAMEWORK_EXTENSIONS=(".myfw")             # Source file extensions
+
+FRAMEWORK_INSTALL_CMD="myfw install"       # Install dependencies
+FRAMEWORK_LINT_CMD="myfw lint"             # Lint / static analysis
+FRAMEWORK_TEST_CMD="myfw test"             # Run tests
+FRAMEWORK_FORMAT_CMD="myfw format"         # Format source code
+FRAMEWORK_CLEAN_CMD="myfw clean"           # Clean build artifacts
+
+scaffold() {
+  local target="$1" name="$2" is_package="$3"
+  mkdir -p "$target"
+  # Create initial project files...
+}
 ```
 
 ## Quality Gates
@@ -90,55 +150,49 @@ Every PR must pass before merge:
 PR opened/updated
   │
   ├─→ CI Gate (ci-mobile.yml)
-  │     └─ Auto-detects framework → runs lint + test + analyze
+  │     └─ Reads framework plugins → runs lint + test per detected framework
   │
   ├─→ Code Quality Gate (code-quality-gate.yml)
-  │     └─ Checks: secrets, duplicates, dead code, TODOs
+  │     └─ Checks: secrets, duplicates, TODOs + framework-specific linters
   │
   ├─→ Copilot Code Review (auto-requested via ruleset)
-  │     └─ Reviews code using .github/copilot-instructions.md
-  │     └─ Copilot Review Gate checks for critical findings
+  │     └─ Reviews using language-specific .github/instructions/
   │
-  ├─→ AI Compliance Gate (ai-compliance-gate.yml) [conditional]
-  │     └─ Only runs if AI/ML files are modified
-  │     └─ Checks: risk classification, transparency, oversight
+  ├─→ AI Compliance Gate [conditional]
+  │     └─ Only if AI/ML files modified
   │
   └─→ Agentic Workflows [informational]
-        ├─ Code Quality Review (code-quality-review.md)
-        └─ AI Compliance Review (ai-compliance-review.md)
+        ├─ Code Quality Review
+        └─ AI Compliance Review
 ```
 
 ## Copilot Agents
 
 ### Code Quality Sweep
 
-Invoked interactively in Copilot Chat:
-
 ```
 @code-quality-sweep run a full sweep
 ```
 
-Performs 6-phase analysis: unused imports → dead code → duplicated constants → duplicated logic → inconsistent patterns → spaghetti code. Creates a branch, makes commits, opens a PR.
+6-phase analysis: unused imports, dead code, duplicated constants, duplicated logic, inconsistent patterns, spaghetti code. Creates a branch, makes commits, opens a PR.
 
 ### EU AI Act Auditor
-
-For apps with AI/ML components:
 
 ```
 @eu-ai-act-auditor audit this repository
 ```
 
-Performs full EU AI Act (Regulation 2024/1689) compliance audit across 12 articles. Generates a compliance scorecard with remediation advice.
+Full EU AI Act (Regulation 2024/1689) compliance audit across 12 articles.
 
 ## Copilot Code Review Instructions
-
-Language-specific review rules are in `.github/instructions/`:
 
 | File | Applies To | Focus |
 |------|-----------|-------|
 | `flutter.instructions.md` | `*.dart` | Widget structure, state management, performance |
 | `react-native.instructions.md` | `*.tsx, *.ts` | Hooks, TypeScript, FlatList, memo |
 | `kotlin.instructions.md` | `*.kt` | Coroutines, Compose, sealed classes |
+| `python.instructions.md` | `*.py` | Type hints, pytest, clean architecture |
+| `go.instructions.md` | `*.go` | Error handling, concurrency, interfaces |
 | `security.instructions.md` | All files | Secrets, HTTPS, storage, auth, GDPR |
 
 ## Agentic Workflows (Technical Preview)
@@ -158,46 +212,35 @@ git commit -m "chore: compile agentic workflows"
 git push
 ```
 
-## Adding a New Framework
-
-The CI pipeline auto-detects frameworks by directory prefix. To add support for a new framework:
-
-1. Define the prefix convention (e.g., `svelte_` for Svelte Native)
-2. Add a detection filter in `ci-mobile.yml`
-3. Add a CI job for the framework
-4. Add an instructions file in `.github/instructions/`
-5. Update `bootstrap.sh` with the creation command
-
 ## Makefile Commands
 
 ```bash
-make help              # Show all commands
-make bootstrap-flutter APP=myapp  # Create new Flutter app
-make bootstrap-rn APP=myapp       # Create new React Native app
-make bootstrap-kotlin APP=myapp   # Create new Kotlin app
-make lint              # Run linters for all detected apps
-make test              # Run tests for all detected apps
-make format            # Format code in all detected apps
-make clean             # Clean build artifacts
-make setup-protection REPO=owner/repo  # Configure branch protection
+make help                          # Show all commands
+make list-frameworks               # List available framework plugins
+make bootstrap FW=flutter APP=myapp # Create new app (any framework)
+make bootstrap-package FW=go APP=shared # Create shared package
+make lint                          # Lint all detected apps
+make test                          # Test all detected apps
+make format                        # Format all detected apps
+make clean                         # Clean all build artifacts
+make setup-protection REPO=owner/repo
 ```
 
 ## Adopting Individual Components
 
-You can copy individual pieces into an existing project:
-
 ```bash
-# Just the quality agents + skills
+# Framework plugin system
+cp -r frameworks/ your-project/
+
+# Quality agents + skills
 cp -r .github/agents/ your-project/.github/
 cp -r .github/skills/ your-project/.github/
 
-# Just the CI workflows
-cp .github/workflows/ci-flutter.yml your-project/.github/workflows/
-
-# Just the quality gate
+# CI + quality gate workflows
+cp .github/workflows/ci-mobile.yml your-project/.github/workflows/
 cp .github/workflows/code-quality-gate.yml your-project/.github/workflows/
 
-# Just Copilot review instructions
+# Copilot review instructions
 cp -r .github/instructions/ your-project/.github/
 cp .github/copilot-instructions.md your-project/.github/
 ```
