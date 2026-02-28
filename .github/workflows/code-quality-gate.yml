@@ -121,7 +121,18 @@ jobs:
           CHANGED_FILES: ${{ steps.changed.outputs.files }}
         run: |
           echo "Checking for potential duplicate constants..."
-          colors=$(echo "$CHANGED_FILES" | xargs grep -rnE "(Color\(0x|Color\.fromARGB|#[0-9a-fA-F]{6})" 2>/dev/null || true)
+          colors=""
+          while IFS= read -r file; do
+            [ -f "$file" ] || continue
+            result=$(grep -rnE "(Color\(0x|Color\.fromARGB|#[0-9a-fA-F]{6})" -- "$file" 2>/dev/null || true)
+            if [ -n "$result" ]; then
+              if [ -z "$colors" ]; then
+                colors="$result"
+              else
+                colors="$colors"$'\n'"$result"
+              fi
+            fi
+          done <<< "$CHANGED_FILES"
           if [ -n "$colors" ]; then
             dupes=$(echo "$colors" | awk -F: '{print $NF}' | sort | uniq -d)
             if [ -n "$dupes" ]; then
