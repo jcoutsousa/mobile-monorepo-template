@@ -27,13 +27,13 @@ lint: ## Run linters for all detected apps
 	@for dir in apps/*/; do \
 		if [ -f "$$dir/pubspec.yaml" ]; then \
 			echo "── Flutter: $$dir"; \
-			(cd "$$dir" && flutter analyze --no-fatal-infos) || true; \
+			if [ -n "$$ALLOW_FAILURES" ]; then (cd "$$dir" && flutter analyze --no-fatal-infos) || true; else (cd "$$dir" && flutter analyze --no-fatal-infos); fi; \
 		elif [ -f "$$dir/package.json" ]; then \
 			echo "── React Native: $$dir"; \
-			(cd "$$dir" && npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 0) || true; \
+			if [ -n "$$ALLOW_FAILURES" ]; then (cd "$$dir" && npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 0) || true; else (cd "$$dir" && npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 0); fi; \
 		elif [ -f "$$dir/build.gradle.kts" ] || [ -f "$$dir/build.gradle" ]; then \
 			echo "── Kotlin: $$dir"; \
-			(cd "$$dir" && ./gradlew lint) || true; \
+			if [ -n "$$ALLOW_FAILURES" ]; then (cd "$$dir" && ./gradlew lint) || true; else (cd "$$dir" && ./gradlew lint); fi; \
 		fi; \
 	done
 
