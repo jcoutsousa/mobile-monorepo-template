@@ -1,4 +1,4 @@
-name: CI — Mobile
+name: CI
 
 on:
   pull_request:
@@ -11,164 +11,195 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ─── Detect which frameworks have changes ─────────────────
   detect-changes:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      flutter: ${{ steps.changes.outputs.flutter }}
-      react-native: ${{ steps.changes.outputs.react-native }}
-      kotlin: ${{ steps.changes.outputs.kotlin }}
-      swift: ${{ steps.changes.outputs.swift }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_jobs: ${{ steps.detect.outputs.has_jobs }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: changes
         with:
-          filters: |
-            flutter:
-              - 'apps/flutter_*/**'
-              - 'packages/flutter_*/**'
-              - 'packages/dart_*/**'
-            react-native:
-              - 'apps/rn_*/**'
-              - 'apps/react_native_*/**'
-              - 'packages/rn_*/**'
-            kotlin:
-              - 'apps/kotlin_*/**'
-              - 'apps/kmp_*/**'
-              - 'packages/kotlin_*/**'
-              - 'packages/kmp_*/**'
-            swift:
-              - 'apps/ios_*/**'
-              - 'apps/swift_*/**'
-              - 'packages/swift_*/**'
+          fetch-depth: 0
 
-  # ─── Flutter CI ────────────────────────────────────────────
-  flutter-ci:
-    name: Flutter CI
+      - name: Detect changed frameworks
+        id: detect
+        run: |
+          # Get changed files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git ls-files)
+          fi
+
+          jobs="[]"
+
+          # Read each framework plugin and check if relevant files changed
+          for fw_file in frameworks/*.sh; do
+            [ ! -f "$fw_file" ] && continue
+            base=$(basename "$fw_file" .sh)
+            [ "$base" = "_template" ] && continue
+
+            # Extract config from plugin
+            FRAMEWORK_NAME=""
+            FRAMEWORK_PREFIXES=()
+            FRAMEWORK_DETECT_FILE=""
+            FRAMEWORK_EXTENSIONS=()
+            FRAMEWORK_INSTALL_CMD=""
+            FRAMEWORK_LINT_CMD=""
+            FRAMEWORK_TEST_CMD=""
+            source "$fw_file"
+
+            # Check if any changed file matches this framework's prefixes
+            has_changes="false"
+            for prefix in "${FRAMEWORK_PREFIXES[@]}"; do
+              if echo "$changed" | grep -qE "^(apps|packages)/${prefix}"; then
+                has_changes="true"
+                break
+              fi
+            done
+
+            # Also check by file extension
+            if [ "$has_changes" = "false" ]; then
+              for ext in "${FRAMEWORK_EXTENSIONS[@]}"; do
+                escaped_ext=$(echo "$ext" | sed 's/\./\\./g')
+                if echo "$changed" | grep -qE "${escaped_ext}$"; then
+                  has_changes="true"
+                  break
+                fi
+              done
+            fi
+
+            if [ "$has_changes" = "true" ]; then
+              # Find all apps/packages for this framework
+              app_dirs=""
+              for prefix in "${FRAMEWORK_PREFIXES[@]}"; do
+                found=$(find apps packages -maxdepth 1 -name "${prefix}*" -type d 2>/dev/null | tr '\n' ' ')
+                app_dirs="$app_dirs $found"
+              done
+              app_dirs=$(echo "$app_dirs" | xargs)
+
+              [ -z "$app_dirs" ] && continue
+
+              job=$(cat <<ENTRY
+            {
+              "framework": "$base",
+              "name": "$FRAMEWORK_NAME",
+              "detect_file": "$FRAMEWORK_DETECT_FILE",
+              "install_cmd": "$FRAMEWORK_INSTALL_CMD",
+              "lint_cmd": "$FRAMEWORK_LINT_CMD",
+              "test_cmd": "$FRAMEWORK_TEST_CMD",
+              "app_dirs": "$app_dirs"
+            }
+          ENTRY
+              )
+              jobs=$(echo "$jobs" | jq --argjson job "$job" '. + [$job]')
+            fi
+          done
+
+          echo "matrix={\"include\":$(echo "$jobs")}" >> $GITHUB_OUTPUT
+          if [ "$(echo "$jobs" | jq 'length')" -gt 0 ]; then
+            echo "has_jobs=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_jobs=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ─── Run CI per framework (dynamic matrix) ────────────────
+  framework-ci:
+    name: "${{ matrix.name }} CI"
     needs: detect-changes
-    if: needs.detect-changes.outputs.flutter == 'true'
+    if: needs.detect-changes.outputs.has_jobs == 'true'
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        app: ${{ fromJson(needs.detect-changes.outputs.flutter == 'true' && '["flutter"]' || '[]') }}
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      # ─── Framework-specific setup ──────────────────────────
+      - name: Setup Flutter
+        if: matrix.framework == 'flutter'
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Find Flutter apps
-        id: find-apps
-        run: |
-          apps=$(find apps -maxdepth 1 -name "flutter_*" -type d | tr '\n' ' ')
-          echo "apps=$apps" >> $GITHUB_OUTPUT
-
-      - name: Install dependencies
-        run: |
-          for app in ${{ steps.find-apps.outputs.apps }}; do
-            echo "::group::$app"
-            cd $app && flutter pub get && cd -
-            echo "::endgroup::"
-          done
-
-      - name: Analyze
-        run: |
-          for app in ${{ steps.find-apps.outputs.apps }}; do
-            echo "::group::$app — flutter analyze"
-            cd $app && flutter analyze --no-fatal-infos && cd -
-            echo "::endgroup::"
-          done
-
-      - name: Test
-        run: |
-          for app in ${{ steps.find-apps.outputs.apps }}; do
-            echo "::group::$app — flutter test"
-            cd $app && flutter test --coverage && cd -
-            echo "::endgroup::"
-          done
-
-  # ─── React Native CI ──────────────────────────────────────
-  react-native-ci:
-    name: React Native CI
-    needs: detect-changes
-    if: needs.detect-changes.outputs.react-native == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        if: matrix.framework == 'react-native'
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Find RN apps
-        id: find-apps
-        run: |
-          apps=$(find apps -maxdepth 1 \( -name "rn_*" -o -name "react_native_*" \) -type d | tr '\n' ' ')
-          echo "apps=$apps" >> $GITHUB_OUTPUT
-
-      - name: Install & Lint & Test
-        run: |
-          for app in ${{ steps.find-apps.outputs.apps }}; do
-            echo "::group::$app"
-            cd $app
-            npm ci
-            npx eslint . --max-warnings 0
-            npx tsc --noEmit
-            npm test -- --coverage --watchAll=false
-            cd -
-            echo "::endgroup::"
-          done
-
-  # ─── Kotlin CI ─────────────────────────────────────────────
-  kotlin-ci:
-    name: Kotlin CI
-    needs: detect-changes
-    if: needs.detect-changes.outputs.kotlin == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
+      - name: Setup Java (Kotlin)
+        if: matrix.framework == 'kotlin'
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: gradle
 
-      - name: Find Kotlin apps
-        id: find-apps
-        run: |
-          apps=$(find apps -maxdepth 1 \( -name "kotlin_*" -o -name "kmp_*" \) -type d | tr '\n' ' ')
-          echo "apps=$apps" >> $GITHUB_OUTPUT
+      - name: Setup Python
+        if: matrix.framework == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
 
-      - name: Build & Test
+      - name: Setup Go
+        if: matrix.framework == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      # ─── Generic: install, lint, test ──────────────────────
+      - name: Install dependencies
+        if: matrix.install_cmd != ''
         run: |
-          for app in ${{ steps.find-apps.outputs.apps }}; do
-            echo "::group::$app"
-            cd $app
-            ./gradlew detekt 2>/dev/null || echo "detekt not configured, skipping"
-            ./gradlew test
-            cd -
-            echo "::endgroup::"
+          for dir in ${{ matrix.app_dirs }}; do
+            if [ -f "$dir/${{ matrix.detect_file }}" ]; then
+              echo "::group::Install — $dir"
+              cd "$dir" && ${{ matrix.install_cmd }} && cd -
+              echo "::endgroup::"
+            fi
           done
 
-  # ─── Gate ──────────────────────────────────────────────────
+      - name: Lint / Analyze
+        if: matrix.lint_cmd != ''
+        run: |
+          for dir in ${{ matrix.app_dirs }}; do
+            if [ -f "$dir/${{ matrix.detect_file }}" ]; then
+              echo "::group::Lint — $dir"
+              cd "$dir" && ${{ matrix.lint_cmd }} && cd -
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Test
+        if: matrix.test_cmd != ''
+        run: |
+          for dir in ${{ matrix.app_dirs }}; do
+            if [ -f "$dir/${{ matrix.detect_file }}" ]; then
+              echo "::group::Test — $dir"
+              cd "$dir" && ${{ matrix.test_cmd }} && cd -
+              echo "::endgroup::"
+            fi
+          done
+
+  # ─── Gate ─────────────────────────────────────────────────
   ci-gate:
     name: CI Gate
     if: always()
-    needs: [detect-changes, flutter-ci, react-native-ci, kotlin-ci]
+    needs: [detect-changes, framework-ci]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
-          results="${{ needs.flutter-ci.result }} ${{ needs.react-native-ci.result }} ${{ needs.kotlin-ci.result }}"
-          for result in $results; do
-            if [[ "$result" == "failure" ]]; then
-              echo "::error::One or more CI jobs failed"
-              exit 1
-            fi
-          done
+          result="${{ needs.framework-ci.result }}"
+          if [[ "$result" == "failure" ]]; then
+            echo "::error::One or more CI jobs failed"
+            exit 1
+          fi
           echo "All CI checks passed or were skipped"

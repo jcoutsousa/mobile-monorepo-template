@@ -25,86 +25,104 @@ jobs:
           echo "$files" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          # Detect which frameworks are affected
-          echo "has_dart=$(echo "$files" | grep -c '\.dart$' || true)" >> $GITHUB_OUTPUT
-          echo "has_ts=$(echo "$files" | grep -cE '\.(ts|tsx|js|jsx)$' || true)" >> $GITHUB_OUTPUT
-          echo "has_kotlin=$(echo "$files" | grep -cE '\.(kt|kts)$' || true)" >> $GITHUB_OUTPUT
+          # Detect which frameworks are affected using plugins
+          for fw_file in frameworks/*.sh; do
+            [ ! -f "$fw_file" ] && continue
+            base=$(basename "$fw_file" .sh)
+            [ "$base" = "_template" ] && continue
 
-      # ─── Dart / Flutter checks ───────────────────────────
+            FRAMEWORK_EXTENSIONS=()
+            source "$fw_file"
+
+            has_match="false"
+            for ext in "${FRAMEWORK_EXTENSIONS[@]}"; do
+              escaped=$(echo "$ext" | sed 's/\./\\./g')
+              if echo "$files" | grep -qE "${escaped}$"; then
+                has_match="true"
+                break
+              fi
+            done
+            echo "has_${base}=${has_match}" >> $GITHUB_OUTPUT
+          done
+
+      # ─── Conditional SDK setup ─────────────────────────────
       - name: Setup Flutter
-        if: steps.changed.outputs.has_dart != '0'
+        if: steps.changed.outputs.has_flutter == 'true'
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Flutter analyze
-        if: steps.changed.outputs.has_dart != '0'
-        run: |
-          for dir in $(find apps packages -maxdepth 1 -name "flutter_*" -o -name "dart_*" 2>/dev/null); do
-            if [ -f "$dir/pubspec.yaml" ]; then
-              echo "::group::Analyzing $dir"
-              cd $dir && flutter pub get && flutter analyze --no-fatal-infos && cd -
-              echo "::endgroup::"
-            fi
-          done
-
-      - name: Dart unused imports check
-        if: steps.changed.outputs.has_dart != '0'
-        run: |
-          violations=""
-          while IFS= read -r file; do
-            if [ -f "$file" ]; then
-              unused=$(grep -n "^import " "$file" | head -50)
-              # Simple heuristic: flag files with >10 imports
-              count=$(echo "$unused" | wc -l)
-              if [ "$count" -gt 10 ]; then
-                violations="$violations\n⚠️ $file has $count imports — review for unused"
-              fi
-            fi
-          done <<< "$(echo "${{ steps.changed.outputs.files }}" | grep '\.dart$')"
-          if [ -n "$violations" ]; then
-            echo -e "::warning::Potential unused imports:$violations"
-          fi
-
-      # ─── TypeScript / React Native checks ────────────────
       - name: Setup Node
-        if: steps.changed.outputs.has_ts != '0'
+        if: steps.changed.outputs.has_react-native == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: ESLint check
-        if: steps.changed.outputs.has_ts != '0'
-        run: |
-          for dir in $(find apps packages -maxdepth 1 \( -name "rn_*" -o -name "react_native_*" \) 2>/dev/null); do
-            if [ -f "$dir/package.json" ]; then
-              echo "::group::Linting $dir"
-              cd $dir && npm ci && npx eslint . --max-warnings 0 && cd -
-              echo "::endgroup::"
-            fi
-          done
-
-      # ─── Kotlin checks ──────────────────────────────────
       - name: Setup Java
-        if: steps.changed.outputs.has_kotlin != '0'
+        if: steps.changed.outputs.has_kotlin == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Detekt check
-        if: steps.changed.outputs.has_kotlin != '0'
+      - name: Setup Python
+        if: steps.changed.outputs.has_python == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Go
+        if: steps.changed.outputs.has_go == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      # ─── Run framework-specific linters via plugins ────────
+      - name: Framework-specific lint checks
         run: |
-          for dir in $(find apps packages -maxdepth 1 \( -name "kotlin_*" -o -name "kmp_*" \) 2>/dev/null); do
-            if [ -f "$dir/build.gradle.kts" ] || [ -f "$dir/build.gradle" ]; then
-              echo "::group::Detekt $dir"
-              cd $dir && ./gradlew detekt 2>/dev/null && cd - || echo "detekt not configured"
-              echo "::endgroup::"
-            fi
+          for fw_file in frameworks/*.sh; do
+            [ ! -f "$fw_file" ] && continue
+            base=$(basename "$fw_file" .sh)
+            [ "$base" = "_template" ] && continue
+
+            FRAMEWORK_NAME=""
+            FRAMEWORK_PREFIXES=()
+            FRAMEWORK_DETECT_FILE=""
+            FRAMEWORK_EXTENSIONS=()
+            FRAMEWORK_LINT_CMD=""
+            FRAMEWORK_INSTALL_CMD=""
+            source "$fw_file"
+
+            # Check if this framework has changed files
+            has_match="false"
+            for ext in "${FRAMEWORK_EXTENSIONS[@]}"; do
+              escaped=$(echo "$ext" | sed 's/\./\\./g')
+              if echo "${{ steps.changed.outputs.files }}" | grep -qE "${escaped}$"; then
+                has_match="true"
+                break
+              fi
+            done
+
+            [ "$has_match" = "false" ] && continue
+            [ -z "$FRAMEWORK_LINT_CMD" ] && continue
+
+            echo "::group::$FRAMEWORK_NAME quality checks"
+            for prefix in "${FRAMEWORK_PREFIXES[@]}"; do
+              for dir in $(find apps packages -maxdepth 1 -name "${prefix}*" -type d 2>/dev/null); do
+                if [ -f "$dir/$FRAMEWORK_DETECT_FILE" ]; then
+                  echo "Checking $dir..."
+                  if [ -n "$FRAMEWORK_INSTALL_CMD" ]; then
+                    (cd "$dir" && eval "$FRAMEWORK_INSTALL_CMD" 2>/dev/null) || true
+                  fi
+                  (cd "$dir" && eval "$FRAMEWORK_LINT_CMD") || true
+                fi
+              done
+            done
+            echo "::endgroup::"
           done
 
-      # ─── Cross-language quality checks ───────────────────
+      # ─── Cross-language quality checks ─────────────────────
       - name: Check for hardcoded secrets
         run: |
           echo "Scanning for potential secrets in changed files..."
@@ -129,8 +147,7 @@ jobs:
       - name: Check for duplicate constants
         run: |
           echo "Checking for potential duplicate constants..."
-          # Check for hardcoded color values repeated across files
-          colors=$(grep -rnE "(Color\(0x|Color\.fromARGB|#[0-9a-fA-F]{6})" ${{ steps.changed.outputs.files }} 2>/dev/null || true)
+          colors=$(grep -rnE "(Color\(0x|Color\.fromARGB|#[0-9a-fA-F]{6}|rgba?\()" ${{ steps.changed.outputs.files }} 2>/dev/null || true)
           if [ -n "$colors" ]; then
             dupes=$(echo "$colors" | awk -F: '{print $NF}' | sort | uniq -d)
             if [ -n "$dupes" ]; then
