@@ -36,8 +36,8 @@ jobs:
         id: vuln-check
         run: |
           if [ -f trivy-vuln-results.txt ]; then
-            critical=$(grep -c "CRITICAL" trivy-vuln-results.txt 2>/dev/null || echo "0")
-            high=$(grep -c "HIGH" trivy-vuln-results.txt 2>/dev/null || echo "0")
+            critical=$(grep -c "CRITICAL" trivy-vuln-results.txt 2>/dev/null) || critical=0
+            high=$(grep -c "HIGH" trivy-vuln-results.txt 2>/dev/null) || high=0
             echo "critical=$critical" >> "$GITHUB_OUTPUT"
             echo "high=$high" >> "$GITHUB_OUTPUT"
 
@@ -50,6 +50,8 @@ jobs:
               echo "No HIGH/CRITICAL vulnerabilities found"
             fi
           else
+            echo "critical=0" >> "$GITHUB_OUTPUT"
+            echo "high=0" >> "$GITHUB_OUTPUT"
             echo "has_vulns=false" >> "$GITHUB_OUTPUT"
             echo "No vulnerability results file generated"
           fi
@@ -71,7 +73,7 @@ jobs:
           if [ -f trivy-secret-results.txt ] && [ -s trivy-secret-results.txt ]; then
             # Trivy outputs an empty table header even when no secrets found
             # Check if there are actual findings (lines beyond the header)
-            findings=$(grep -cE "^[│|]" trivy-secret-results.txt 2>/dev/null || echo "0")
+            findings=$(grep -cE "^[│|]" trivy-secret-results.txt 2>/dev/null) || findings=0
             if [ "$findings" -gt 2 ]; then
               echo "has_secrets=true" >> "$GITHUB_OUTPUT"
               echo "::error::Hardcoded secrets detected!"
@@ -101,7 +103,7 @@ jobs:
         id: misconfig-check
         run: |
           if [ -f trivy-misconfig-results.txt ] && [ -s trivy-misconfig-results.txt ]; then
-            findings=$(grep -cE "(CRITICAL|HIGH)" trivy-misconfig-results.txt 2>/dev/null || echo "0")
+            findings=$(grep -cE "(CRITICAL|HIGH)" trivy-misconfig-results.txt 2>/dev/null) || findings=0
             if [ "$findings" -gt 0 ]; then
               echo "has_misconfig=true" >> "$GITHUB_OUTPUT"
               echo "::warning::Infrastructure misconfigurations found"
@@ -132,7 +134,7 @@ jobs:
           # Flag copyleft licenses that may conflict with proprietary code
           copyleft_patterns="GPL|AGPL|SSPL|EUPL|OSL|CPAL|RPL|Sleepycat"
           if [ -f trivy-license-results.txt ] && [ -s trivy-license-results.txt ]; then
-            copyleft=$(grep -cEi "$copyleft_patterns" trivy-license-results.txt 2>/dev/null || echo "0")
+            copyleft=$(grep -cEi "$copyleft_patterns" trivy-license-results.txt 2>/dev/null) || copyleft=0
             if [ "$copyleft" -gt 0 ]; then
               echo "has_copyleft=true" >> "$GITHUB_OUTPUT"
               echo "::warning::Copyleft licenses detected — review for compatibility:"
