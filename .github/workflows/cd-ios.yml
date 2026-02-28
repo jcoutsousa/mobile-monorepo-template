@@ -164,17 +164,16 @@ jobs:
 
       - name: Deploy to TestFlight / App Store
         run: |
-          echo "=== Deploy to ${{ github.event.inputs.environment }} ==="
-          echo "App: ${{ github.event.inputs.app }}"
+          echo "::error::Deployment is not yet implemented."
           echo ""
-          echo "TODO: Configure fastlane for automated deploy."
-          echo "Example:"
-          echo "  fastlane pilot upload --ipa release/*.ipa"
-          echo ""
-          echo "Required secrets:"
+          echo "To enable automated deployment, configure fastlane and add the following secrets:"
           echo "  - APP_STORE_CONNECT_API_KEY"
           echo "  - APP_STORE_CONNECT_KEY_ID"
           echo "  - APP_STORE_CONNECT_ISSUER_ID"
+          echo ""
+          echo "Example fastlane command:"
+          echo "  fastlane pilot upload --ipa release/*.ipa"
+          exit 1
 
       - name: Summary
         run: |
