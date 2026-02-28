@@ -1,0 +1,279 @@
+name: Security Gate
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  trivy-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ─── Dependency vulnerability scan ───────────────────────
+      - name: Scan dependencies for vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: table
+          output: trivy-vuln-results.txt
+          exit-code: 0
+
+      - name: Check for critical/high vulnerabilities
+        id: vuln-check
+        run: |
+          if [ -f trivy-vuln-results.txt ]; then
+            critical=$(grep -c "CRITICAL" trivy-vuln-results.txt 2>/dev/null) || critical=0
+            high=$(grep -c "HIGH" trivy-vuln-results.txt 2>/dev/null) || high=0
+            echo "critical=$critical" >> "$GITHUB_OUTPUT"
+            echo "high=$high" >> "$GITHUB_OUTPUT"
+
+            if [ "$critical" -gt 0 ] || [ "$high" -gt 0 ]; then
+              echo "has_vulns=true" >> "$GITHUB_OUTPUT"
+              echo "::error::Found $critical CRITICAL and $high HIGH vulnerabilities"
+              cat trivy-vuln-results.txt
+            else
+              echo "has_vulns=false" >> "$GITHUB_OUTPUT"
+              echo "No HIGH/CRITICAL vulnerabilities found"
+            fi
+          else
+            echo "critical=0" >> "$GITHUB_OUTPUT"
+            echo "high=0" >> "$GITHUB_OUTPUT"
+            echo "has_vulns=false" >> "$GITHUB_OUTPUT"
+            echo "No vulnerability results file generated"
+          fi
+
+      # ─── Secret scanning ─────────────────────────────────────
+      - name: Scan for hardcoded secrets
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          format: table
+          output: trivy-secret-results.txt
+          exit-code: 0
+
+      - name: Check for secrets
+        id: secret-check
+        run: |
+          if [ -f trivy-secret-results.txt ] && [ -s trivy-secret-results.txt ]; then
+            # Trivy outputs an empty table header even when no secrets found
+            # Check if there are actual findings (lines beyond the header)
+            findings=$(grep -cE "^[│|]" trivy-secret-results.txt 2>/dev/null) || findings=0
+            if [ "$findings" -gt 2 ]; then
+              echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+              echo "::error::Hardcoded secrets detected!"
+              cat trivy-secret-results.txt
+            else
+              echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+              echo "No hardcoded secrets found"
+            fi
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "No secrets detected"
+          fi
+
+      # ─── Misconfig scanning (Dockerfiles, IaC) ──────────────
+      - name: Scan for misconfigurations
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: misconfig
+          severity: HIGH,CRITICAL
+          format: table
+          output: trivy-misconfig-results.txt
+          exit-code: 0
+
+      - name: Check for misconfigurations
+        id: misconfig-check
+        run: |
+          if [ -f trivy-misconfig-results.txt ] && [ -s trivy-misconfig-results.txt ]; then
+            findings=$(grep -cE "(CRITICAL|HIGH)" trivy-misconfig-results.txt 2>/dev/null) || findings=0
+            if [ "$findings" -gt 0 ]; then
+              echo "has_misconfig=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::Infrastructure misconfigurations found"
+              cat trivy-misconfig-results.txt
+            else
+              echo "has_misconfig=false" >> "$GITHUB_OUTPUT"
+              echo "No HIGH/CRITICAL misconfigurations found"
+            fi
+          else
+            echo "has_misconfig=false" >> "$GITHUB_OUTPUT"
+            echo "No misconfigurations detected"
+          fi
+
+      # ─── License compliance ──────────────────────────────────
+      - name: Scan licenses
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: license
+          format: table
+          output: trivy-license-results.txt
+          exit-code: 0
+
+      - name: Check license compliance
+        id: license-check
+        run: |
+          # Flag copyleft licenses that may conflict with proprietary code
+          copyleft_patterns="GPL|AGPL|SSPL|EUPL|OSL|CPAL|RPL|Sleepycat"
+          if [ -f trivy-license-results.txt ] && [ -s trivy-license-results.txt ]; then
+            copyleft=$(grep -cEi "$copyleft_patterns" trivy-license-results.txt 2>/dev/null) || copyleft=0
+            if [ "$copyleft" -gt 0 ]; then
+              echo "has_copyleft=true" >> "$GITHUB_OUTPUT"
+              echo "::warning::Copyleft licenses detected — review for compatibility:"
+              grep -Ei "$copyleft_patterns" trivy-license-results.txt || true
+            else
+              echo "has_copyleft=false" >> "$GITHUB_OUTPUT"
+              echo "No copyleft license issues found"
+            fi
+          else
+            echo "has_copyleft=false" >> "$GITHUB_OUTPUT"
+            echo "No license issues detected"
+          fi
+
+      # ─── SARIF upload to GitHub Security tab ─────────────────
+      - name: Generate SARIF report
+        uses: aquasecurity/trivy-action@0.28.0
+        if: always()
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig,license
+          format: sarif
+          output: trivy-results.sarif
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      # ─── PR comment with summary ────────────────────────────
+      - name: Post security summary on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        env:
+          HAS_VULNS: ${{ steps.vuln-check.outputs.has_vulns }}
+          HAS_SECRETS: ${{ steps.secret-check.outputs.has_secrets }}
+          HAS_MISCONFIG: ${{ steps.misconfig-check.outputs.has_misconfig }}
+          HAS_COPYLEFT: ${{ steps.license-check.outputs.has_copyleft }}
+          CRITICAL_COUNT: ${{ steps.vuln-check.outputs.critical }}
+          HIGH_COUNT: ${{ steps.vuln-check.outputs.high }}
+        with:
+          script: |
+            const hasVulns = process.env.HAS_VULNS === 'true';
+            const hasSecrets = process.env.HAS_SECRETS === 'true';
+            const hasMisconfig = process.env.HAS_MISCONFIG === 'true';
+            const hasCopyleft = process.env.HAS_COPYLEFT === 'true';
+            const critical = process.env.CRITICAL_COUNT || '0';
+            const high = process.env.HIGH_COUNT || '0';
+
+            const icon = (ok) => ok ? '❌' : '✅';
+            const body = [
+              '## 🔒 Security Gate Report',
+              '',
+              '| Scanner | Status | Details |',
+              '|---------|--------|---------|',
+              `| **Vulnerabilities** | ${icon(hasVulns)} | ${hasVulns ? `${critical} critical, ${high} high` : 'No HIGH/CRITICAL'} |`,
+              `| **Secrets** | ${icon(hasSecrets)} | ${hasSecrets ? 'Hardcoded secrets detected' : 'Clean'} |`,
+              `| **Misconfigurations** | ${icon(hasMisconfig)} | ${hasMisconfig ? 'Issues found' : 'Clean'} |`,
+              `| **Licenses** | ${icon(hasCopyleft)} | ${hasCopyleft ? '⚠️ Copyleft detected' : 'Compatible'} |`,
+              '',
+              hasSecrets || hasVulns
+                ? '> ⛔ **Merge blocked** — fix critical issues before merging.'
+                : '> ✅ **Security checks passed.**',
+              '',
+              '_Powered by [Trivy](https://github.com/aquasecurity/trivy) • Results also in the Security tab_',
+            ].join('\n');
+
+            // Find and update existing comment or create new
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.body.includes('## 🔒 Security Gate Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      # ─── Final gate decision ─────────────────────────────────
+      - name: Security gate decision
+        if: always()
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════════"
+          echo "  Security Gate Summary"
+          echo "═══════════════════════════════════════════════════"
+          echo ""
+
+          failed=false
+
+          if [ "${{ steps.secret-check.outputs.has_secrets }}" = "true" ]; then
+            echo "❌ SECRETS: Hardcoded secrets detected — BLOCKING"
+            failed=true
+          else
+            echo "✅ SECRETS: Clean"
+          fi
+
+          if [ "${{ steps.vuln-check.outputs.has_vulns }}" = "true" ]; then
+            echo "❌ VULNERABILITIES: ${{ steps.vuln-check.outputs.critical }} critical, ${{ steps.vuln-check.outputs.high }} high — BLOCKING"
+            failed=true
+          else
+            echo "✅ VULNERABILITIES: No HIGH/CRITICAL"
+          fi
+
+          if [ "${{ steps.misconfig-check.outputs.has_misconfig }}" = "true" ]; then
+            echo "⚠️  MISCONFIGURATIONS: Issues found — WARNING (non-blocking)"
+          else
+            echo "✅ MISCONFIGURATIONS: Clean"
+          fi
+
+          if [ "${{ steps.license-check.outputs.has_copyleft }}" = "true" ]; then
+            echo "⚠️  LICENSES: Copyleft detected — WARNING (non-blocking)"
+          else
+            echo "✅ LICENSES: Compatible"
+          fi
+
+          echo ""
+
+          if [ "$failed" = "true" ]; then
+            echo "::error::Security gate FAILED — vulnerabilities or secrets detected"
+            exit 1
+          fi
+
+          echo "Security gate PASSED"

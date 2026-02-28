@@ -1,0 +1,189 @@
+name: "CD - Android"
+
+# Deploy Android app to Google Play Store.
+# Manual trigger with app selection and release track.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App to deploy (directory name under apps/)"
+        required: true
+        type: string
+      track:
+        description: "Play Store track"
+        required: true
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      build_number:
+        description: "Build number override (leave empty for auto)"
+        required: false
+        type: string
+
+concurrency:
+  group: cd-android-${{ github.event.inputs.app }}
+
+permissions:
+  contents: read
+
+env:
+  APP_DIR: apps/${{ github.event.inputs.app }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    outputs:
+      framework: ${{ steps.detect.outputs.framework }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate app exists
+        run: |
+          if [ ! -d "$APP_DIR" ]; then
+            echo "::error::App directory '$APP_DIR' does not exist"
+            exit 1
+          fi
+
+      - name: Detect framework
+        id: detect
+        run: |
+          if [ -f "$APP_DIR/pubspec.yaml" ]; then
+            echo "framework=flutter" >> "$GITHUB_OUTPUT"
+          elif [ -f "$APP_DIR/build.gradle.kts" ] || [ -f "$APP_DIR/build.gradle" ]; then
+            echo "framework=kotlin" >> "$GITHUB_OUTPUT"
+          elif [ -f "$APP_DIR/package.json" ]; then
+            echo "framework=react-native" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Cannot detect framework for $APP_DIR"
+            exit 1
+          fi
+
+      - name: Production guard
+        if: github.event.inputs.track == 'production' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Production deploys only from main branch"
+          exit 1
+
+  build:
+    name: Build AAB
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Flutter
+        if: needs.validate.outputs.framework == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Node.js
+        if: needs.validate.outputs.framework == 'react-native'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > /tmp/keystore.jks
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Build (Flutter)
+        if: needs.validate.outputs.framework == 'flutter'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter pub get
+          flutter build appbundle --release \
+            --build-number=${{ github.event.inputs.build_number || github.run_number }}
+        env:
+          ANDROID_KEYSTORE_PATH: /tmp/keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Build (Kotlin)
+        if: needs.validate.outputs.framework == 'kotlin'
+        working-directory: ${{ env.APP_DIR }}
+        run: ./gradlew bundleRelease --no-daemon
+        env:
+          ANDROID_KEYSTORE_PATH: /tmp/keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Build (React Native)
+        if: needs.validate.outputs.framework == 'react-native'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          npm ci
+          cd android && ./gradlew bundleRelease --no-daemon
+        env:
+          ANDROID_KEYSTORE_PATH: /tmp/keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: |
+            ${{ env.APP_DIR }}/**/outputs/bundle/release/*.aab
+            ${{ env.APP_DIR }}/build/app/outputs/bundle/release/*.aab
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/keystore.jks
+
+  deploy:
+    name: Deploy to ${{ github.event.inputs.track }}
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: android-aab
+          path: ./release
+
+      - name: Deploy to Play Store
+        run: |
+          echo "=== Deploy to Google Play Store ==="
+          echo "Track: ${{ github.event.inputs.track }}"
+          echo "App: ${{ github.event.inputs.app }}"
+          echo ""
+          echo "TODO: Configure fastlane or r8 for automated deploy."
+          echo "Example with fastlane:"
+          echo "  fastlane supply --aab release/*.aab --track ${{ github.event.inputs.track }}"
+          echo ""
+          echo "Required secrets:"
+          echo "  - GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"
+          echo ""
+          echo "::error::Android deploy step not implemented. This workflow does not perform a real deployment yet."
+          echo "Failing this job to avoid a false sense of a successful release."
+          exit 1
+      - name: Summary
+        run: |
+          echo "## Android Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| App | ${{ github.event.inputs.app }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Framework | ${{ needs.validate.outputs.framework }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Track | ${{ github.event.inputs.track }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | ${{ github.ref_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Run | #${{ github.run_number }} |" >> "$GITHUB_STEP_SUMMARY"

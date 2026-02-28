@@ -1,0 +1,188 @@
+name: "CD - iOS"
+
+# Deploy iOS app to TestFlight or App Store.
+# Manual trigger with app selection and environment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App to deploy (directory name under apps/)"
+        required: true
+        type: string
+      environment:
+        description: "Deployment target"
+        required: true
+        type: choice
+        options:
+          - testflight
+          - app_store
+      build_number:
+        description: "Build number override (leave empty for auto)"
+        required: false
+        type: string
+
+concurrency:
+  group: cd-ios-${{ github.event.inputs.app }}
+
+permissions:
+  contents: read
+
+env:
+  APP_DIR: apps/${{ github.event.inputs.app }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: macos-latest
+    outputs:
+      framework: ${{ steps.detect.outputs.framework }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate app exists
+        run: |
+          if [ ! -d "$APP_DIR" ]; then
+            echo "::error::App directory '$APP_DIR' does not exist"
+            exit 1
+          fi
+
+      - name: Detect framework
+        id: detect
+        run: |
+          if [ -f "$APP_DIR/pubspec.yaml" ]; then
+            echo "framework=flutter" >> "$GITHUB_OUTPUT"
+          elif [ -f "$APP_DIR/package.json" ]; then
+            echo "framework=react-native" >> "$GITHUB_OUTPUT"
+          elif [ -d "$APP_DIR/ios" ] || [ -f "$APP_DIR/Package.swift" ]; then
+            echo "framework=swift" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Cannot detect iOS-capable framework for $APP_DIR"
+            exit 1
+          fi
+
+      - name: Production guard
+        if: github.event.inputs.environment == 'app_store' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::App Store deploys only from main branch"
+          exit 1
+
+  build:
+    name: Build IPA
+    needs: validate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        if: needs.validate.outputs.framework == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Node.js
+        if: needs.validate.outputs.framework == 'react-native'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install CocoaPods
+        run: |
+          if [ -f "$APP_DIR/ios/Podfile" ]; then
+            cd "$APP_DIR/ios" && pod install
+          fi
+
+      - name: Setup signing
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          echo "${{ secrets.APPLE_CERTIFICATE_BASE64 }}" | base64 --decode > /tmp/certificate.p12
+          security import /tmp/certificate.p12 -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Install provisioning profile
+          echo "${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}" | base64 --decode > /tmp/profile.mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp /tmp/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      - name: Build IPA (Flutter)
+        if: needs.validate.outputs.framework == 'flutter'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter pub get
+          flutter build ipa --release \
+            --build-number=${{ github.event.inputs.build_number || github.run_number }} \
+            --export-options-plist=ios/ExportOptions.plist
+
+      - name: Build IPA (React Native)
+        if: needs.validate.outputs.framework == 'react-native'
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          npm ci
+          cd ios
+          xcodebuild -workspace *.xcworkspace -scheme Release \
+            -sdk iphoneos -configuration Release \
+            -archivePath $RUNNER_TEMP/app.xcarchive archive \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/app.xcarchive \
+            -exportPath $RUNNER_TEMP/export \
+            -exportOptionsPlist ExportOptions.plist
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: |
+            ${{ env.APP_DIR }}/build/ios/ipa/*.ipa
+            ${{ runner.temp }}/export/*.ipa
+          retention-days: 7
+
+      - name: Cleanup signing
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/signing.keychain-db 2>/dev/null || true
+          rm -f /tmp/certificate.p12 /tmp/profile.mobileprovision
+
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    needs: [validate, build]
+    runs-on: macos-latest
+    steps:
+      - name: Download IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-ipa
+          path: ./release
+
+      - name: Deploy to TestFlight / App Store
+        run: |
+          echo "::error::Deployment is not yet implemented."
+          echo ""
+          echo "To enable automated deployment, configure fastlane and add the following secrets:"
+          echo "  - APP_STORE_CONNECT_API_KEY"
+          echo "  - APP_STORE_CONNECT_KEY_ID"
+          echo "  - APP_STORE_CONNECT_ISSUER_ID"
+          echo ""
+          echo "Example fastlane command:"
+          echo "  fastlane pilot upload --ipa release/*.ipa"
+          exit 1
+
+      - name: Summary
+        run: |
+          echo "## iOS Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| App | ${{ github.event.inputs.app }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Framework | ${{ needs.validate.outputs.framework }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Environment | ${{ github.event.inputs.environment }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | ${{ github.ref_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Run | #${{ github.run_number }} |" >> "$GITHUB_STEP_SUMMARY"
