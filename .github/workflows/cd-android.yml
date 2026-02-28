@@ -172,7 +172,10 @@ jobs:
           echo ""
           echo "Required secrets:"
           echo "  - GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"
-
+          echo ""
+          echo "::error::Android deploy step not implemented. This workflow does not perform a real deployment yet."
+          echo "Failing this job to avoid a false sense of a successful release."
+          exit 1
       - name: Summary
         run: |
           echo "## Android Deployment" >> "$GITHUB_STEP_SUMMARY"
