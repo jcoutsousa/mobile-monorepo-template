@@ -1,7 +1,11 @@
-# ─── Mobile Monorepo Makefile ─────────────────────────────────
-# Auto-detects apps and runs the appropriate tools per framework.
+# ─── Monorepo Makefile ──────────────────────────────────────
+# Auto-discovers apps via framework plugins in frameworks/.
+# No hardcoded languages — add a .sh file to frameworks/ to
+# support a new framework.
 
-.PHONY: help bootstrap-flutter bootstrap-rn bootstrap-kotlin setup-protection lint test clean
+.PHONY: help bootstrap bootstrap-package lint test format clean setup-protection list-frameworks
+
+FRAMEWORKS_DIR := frameworks
 
 # ─── Default ──────────────────────────────────────────────────
 help: ## Show this help
@@ -9,80 +13,93 @@ help: ## Show this help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 # ─── Bootstrap ────────────────────────────────────────────────
-bootstrap-flutter: ## Create a new Flutter app (usage: make bootstrap-flutter APP=myapp)
-	@./scripts/bootstrap.sh flutter $(APP)
-
-bootstrap-rn: ## Create a new React Native app (usage: make bootstrap-rn APP=myapp)
-	@./scripts/bootstrap.sh rn $(APP)
-
-bootstrap-kotlin: ## Create a new Kotlin app (usage: make bootstrap-kotlin APP=myapp)
-	@./scripts/bootstrap.sh kotlin $(APP)
+bootstrap: ## Create a new app (usage: make bootstrap FW=flutter APP=myapp)
+	@./scripts/bootstrap.sh $(FW) $(APP)
 
 bootstrap-package: ## Create a shared package (usage: make bootstrap-package FW=flutter APP=utils)
 	@./scripts/bootstrap.sh $(FW) $(APP) --package
 
+list-frameworks: ## List available frameworks
+	@./scripts/bootstrap.sh --list
+
 # ─── Quality ──────────────────────────────────────────────────
+# Discovers apps by sourcing each framework plugin and checking
+# for the detect file in each apps/* directory.
+
 lint: ## Run linters for all detected apps
 	@echo "Scanning for apps..."
-	@for dir in apps/*/; do \
-		if [ -f "$$dir/pubspec.yaml" ]; then \
-			echo "── Flutter: $$dir"; \
-			(cd "$$dir" && flutter analyze --no-fatal-infos) || true; \
-		elif [ -f "$$dir/package.json" ]; then \
-			echo "── React Native: $$dir"; \
-			(cd "$$dir" && npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 0) || true; \
-		elif [ -f "$$dir/build.gradle.kts" ] || [ -f "$$dir/build.gradle" ]; then \
-			echo "── Kotlin: $$dir"; \
-			(cd "$$dir" && ./gradlew lint) || true; \
-		fi; \
+	@for fw in $(FRAMEWORKS_DIR)/*.sh; do \
+		base=$$(basename "$$fw" .sh); \
+		[ "$$base" = "_template" ] && continue; \
+		FRAMEWORK_DETECT_FILE=""; FRAMEWORK_LINT_CMD=""; FRAMEWORK_INSTALL_CMD=""; FRAMEWORK_NAME=""; \
+		eval "$$(grep -E '^FRAMEWORK_(DETECT_FILE|LINT_CMD|INSTALL_CMD|NAME)=' "$$fw")"; \
+		[ -z "$$FRAMEWORK_LINT_CMD" ] && continue; \
+		for dir in apps/*/; do \
+			[ ! -d "$$dir" ] && continue; \
+			if [ -f "$$dir/$$FRAMEWORK_DETECT_FILE" ]; then \
+				echo "── $$FRAMEWORK_NAME: $$dir"; \
+				if [ -n "$$FRAMEWORK_INSTALL_CMD" ]; then \
+					(cd "$$dir" && eval "$$FRAMEWORK_INSTALL_CMD" 2>/dev/null) || true; \
+				fi; \
+				(cd "$$dir" && eval "$$FRAMEWORK_LINT_CMD") || true; \
+			fi; \
+		done; \
 	done
 
 test: ## Run tests for all detected apps
 	@echo "Running tests..."
-	@for dir in apps/*/; do \
-		if [ -f "$$dir/pubspec.yaml" ]; then \
-			echo "── Flutter: $$dir"; \
-			(cd "$$dir" && flutter test) || true; \
-		elif [ -f "$$dir/package.json" ]; then \
-			echo "── React Native: $$dir"; \
-			(cd "$$dir" && npm test -- --watchAll=false) || true; \
-		elif [ -f "$$dir/build.gradle.kts" ] || [ -f "$$dir/build.gradle" ]; then \
-			echo "── Kotlin: $$dir"; \
-			(cd "$$dir" && ./gradlew test) || true; \
-		fi; \
+	@for fw in $(FRAMEWORKS_DIR)/*.sh; do \
+		base=$$(basename "$$fw" .sh); \
+		[ "$$base" = "_template" ] && continue; \
+		FRAMEWORK_DETECT_FILE=""; FRAMEWORK_TEST_CMD=""; FRAMEWORK_INSTALL_CMD=""; FRAMEWORK_NAME=""; \
+		eval "$$(grep -E '^FRAMEWORK_(DETECT_FILE|TEST_CMD|INSTALL_CMD|NAME)=' "$$fw")"; \
+		[ -z "$$FRAMEWORK_TEST_CMD" ] && continue; \
+		for dir in apps/*/; do \
+			[ ! -d "$$dir" ] && continue; \
+			if [ -f "$$dir/$$FRAMEWORK_DETECT_FILE" ]; then \
+				echo "── $$FRAMEWORK_NAME: $$dir"; \
+				if [ -n "$$FRAMEWORK_INSTALL_CMD" ]; then \
+					(cd "$$dir" && eval "$$FRAMEWORK_INSTALL_CMD" 2>/dev/null) || true; \
+				fi; \
+				(cd "$$dir" && eval "$$FRAMEWORK_TEST_CMD") || true; \
+			fi; \
+		done; \
 	done
 
 format: ## Format code in all detected apps
 	@echo "Formatting..."
-	@for dir in apps/*/; do \
-		if [ -f "$$dir/pubspec.yaml" ]; then \
-			echo "── Flutter: $$dir"; \
-			(cd "$$dir" && dart format .) || true; \
-		elif [ -f "$$dir/package.json" ]; then \
-			echo "── React Native: $$dir"; \
-			(cd "$$dir" && npx prettier --write "src/**/*.{ts,tsx,js,jsx}") || true; \
-		elif [ -f "$$dir/build.gradle.kts" ] || [ -f "$$dir/build.gradle" ]; then \
-			echo "── Kotlin: $$dir"; \
-			(cd "$$dir" && ./gradlew ktlintFormat 2>/dev/null) || true; \
-		fi; \
+	@for fw in $(FRAMEWORKS_DIR)/*.sh; do \
+		base=$$(basename "$$fw" .sh); \
+		[ "$$base" = "_template" ] && continue; \
+		FRAMEWORK_DETECT_FILE=""; FRAMEWORK_FORMAT_CMD=""; FRAMEWORK_NAME=""; \
+		eval "$$(grep -E '^FRAMEWORK_(DETECT_FILE|FORMAT_CMD|NAME)=' "$$fw")"; \
+		[ -z "$$FRAMEWORK_FORMAT_CMD" ] && continue; \
+		for dir in apps/*/; do \
+			[ ! -d "$$dir" ] && continue; \
+			if [ -f "$$dir/$$FRAMEWORK_DETECT_FILE" ]; then \
+				echo "── $$FRAMEWORK_NAME: $$dir"; \
+				(cd "$$dir" && eval "$$FRAMEWORK_FORMAT_CMD") || true; \
+			fi; \
+		done; \
+	done
+
+clean: ## Clean build artifacts for all detected apps
+	@echo "Cleaning..."
+	@for fw in $(FRAMEWORKS_DIR)/*.sh; do \
+		base=$$(basename "$$fw" .sh); \
+		[ "$$base" = "_template" ] && continue; \
+		FRAMEWORK_DETECT_FILE=""; FRAMEWORK_CLEAN_CMD=""; FRAMEWORK_NAME=""; \
+		eval "$$(grep -E '^FRAMEWORK_(DETECT_FILE|CLEAN_CMD|NAME)=' "$$fw")"; \
+		[ -z "$$FRAMEWORK_CLEAN_CMD" ] && continue; \
+		for dir in apps/*/; do \
+			[ ! -d "$$dir" ] && continue; \
+			if [ -f "$$dir/$$FRAMEWORK_DETECT_FILE" ]; then \
+				echo "── $$FRAMEWORK_NAME: $$dir"; \
+				(cd "$$dir" && eval "$$FRAMEWORK_CLEAN_CMD") || true; \
+			fi; \
+		done; \
 	done
 
 # ─── Setup ────────────────────────────────────────────────────
 setup-protection: ## Configure branch protection rules (usage: make setup-protection REPO=owner/repo)
 	@./scripts/setup-branch-protection.sh $(REPO)
-
-# ─── Clean ────────────────────────────────────────────────────
-clean: ## Clean build artifacts for all apps
-	@echo "Cleaning..."
-	@for dir in apps/*/; do \
-		if [ -f "$$dir/pubspec.yaml" ]; then \
-			echo "── Flutter: $$dir"; \
-			(cd "$$dir" && flutter clean) || true; \
-		elif [ -f "$$dir/package.json" ]; then \
-			echo "── React Native: $$dir"; \
-			rm -rf "$$dir/node_modules" "$$dir/.cache"; \
-		elif [ -f "$$dir/build.gradle.kts" ] || [ -f "$$dir/build.gradle" ]; then \
-			echo "── Kotlin: $$dir"; \
-			(cd "$$dir" && ./gradlew clean) || true; \
-		fi; \
-	done

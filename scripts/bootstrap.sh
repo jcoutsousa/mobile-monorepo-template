@@ -1,126 +1,179 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ─── Mobile Monorepo Bootstrap Script ───────────────────────
+# ─── Monorepo Bootstrap Script ─────────────────────────────
+# Plugin-based — auto-discovers available frameworks from
+# the frameworks/ directory. Add a new .sh file there to
+# support a new language/framework.
+#
 # Usage:
-#   ./scripts/bootstrap.sh <framework> <app-name> [--package]
+#   ./scripts/bootstrap.sh <framework> <name> [--package]
+#   ./scripts/bootstrap.sh --list
 #
 # Examples:
-#   ./scripts/bootstrap.sh flutter myapp          # Creates apps/flutter_myapp
-#   ./scripts/bootstrap.sh rn myapp               # Creates apps/rn_myapp
-#   ./scripts/bootstrap.sh kotlin myapp            # Creates apps/kotlin_myapp
-#   ./scripts/bootstrap.sh flutter utils --package # Creates packages/flutter_utils
+#   ./scripts/bootstrap.sh flutter myapp
+#   ./scripts/bootstrap.sh python ml-service
+#   ./scripts/bootstrap.sh go api-gateway
+#   ./scripts/bootstrap.sh react-native utils --package
+#   ./scripts/bootstrap.sh --list
 
-FRAMEWORK="${1:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+FRAMEWORKS_DIR="$REPO_ROOT/frameworks"
+
+# ─── Helpers ────────────────────────────────────────────────
+
+list_frameworks() {
+  local found=0
+  for f in "$FRAMEWORKS_DIR"/*.sh; do
+    [ ! -f "$f" ] && continue
+    local base
+    base="$(basename "$f" .sh)"
+    [ "$base" = "_template" ] && continue
+
+    # Source to get FRAMEWORK_NAME
+    local FRAMEWORK_NAME=""
+    # shellcheck disable=SC1090
+    source "$f"
+    printf "  %-20s %s\n" "$base" "$FRAMEWORK_NAME"
+    found=1
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "  (none — add .sh files to frameworks/)"
+  fi
+}
+
+resolve_framework() {
+  local input="$1"
+
+  # Direct match
+  if [ -f "$FRAMEWORKS_DIR/${input}.sh" ]; then
+    echo "${input}.sh"
+    return
+  fi
+
+  # Alias match (e.g. "rn" → "react-native", "kmp" → "kotlin")
+  for f in "$FRAMEWORKS_DIR"/*.sh; do
+    [ ! -f "$f" ] && continue
+    local base
+    base="$(basename "$f" .sh)"
+    [ "$base" = "_template" ] && continue
+
+    local FRAMEWORK_PREFIXES=()
+    # shellcheck disable=SC1090
+    source "$f"
+    for prefix in "${FRAMEWORK_PREFIXES[@]}"; do
+      # Strip trailing underscore to get alias
+      local alias="${prefix%_}"
+      if [ "$input" = "$alias" ]; then
+        echo "$base.sh"
+        return
+      fi
+    done
+  done
+
+  return 1
+}
+
+usage() {
+  echo "Usage: $0 <framework> <name> [--package]"
+  echo "       $0 --list"
+  echo ""
+  echo "Available frameworks:"
+  list_frameworks
+  echo ""
+  echo "Options:"
+  echo "  --package    Create a shared package in packages/ instead of apps/"
+  echo "  --list       List all available frameworks"
+  echo ""
+  echo "To add a new framework, copy frameworks/_template.sh"
+}
+
+# ─── Parse arguments ────────────────────────────────────────
+
+if [ "${1:-}" = "--list" ]; then
+  echo "Available frameworks:"
+  list_frameworks
+  exit 0
+fi
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+  usage
+  exit 0
+fi
+
+FRAMEWORK_INPUT="${1:-}"
 APP_NAME="${2:-}"
 IS_PACKAGE="${3:-}"
 
-if [ -z "$FRAMEWORK" ] || [ -z "$APP_NAME" ]; then
-  echo "Usage: $0 <framework> <app-name> [--package]"
-  echo ""
-  echo "Frameworks: flutter, rn, kotlin, swift"
-  echo ""
-  echo "Examples:"
-  echo "  $0 flutter myapp          # New Flutter app"
-  echo "  $0 rn myapp               # New React Native app"
-  echo "  $0 kotlin myapp            # New Kotlin app"
-  echo "  $0 flutter utils --package # New shared Flutter package"
+if [ -z "$FRAMEWORK_INPUT" ] || [ -z "$APP_NAME" ]; then
+  usage
   exit 1
 fi
 
-# Determine target directory
+# ─── Resolve framework plugin ──────────────────────────────
+
+FRAMEWORK_FILE=$(resolve_framework "$FRAMEWORK_INPUT") || {
+  echo "Error: Unknown framework '$FRAMEWORK_INPUT'"
+  echo ""
+  echo "Available frameworks:"
+  list_frameworks
+  echo ""
+  echo "To add a new framework, copy frameworks/_template.sh"
+  exit 1
+}
+
+# Reset variables before sourcing
+FRAMEWORK_NAME=""
+FRAMEWORK_PREFIXES=()
+FRAMEWORK_DETECT_FILE=""
+FRAMEWORK_EXTENSIONS=()
+FRAMEWORK_INSTALL_CMD=""
+FRAMEWORK_LINT_CMD=""
+FRAMEWORK_TEST_CMD=""
+FRAMEWORK_FORMAT_CMD=""
+FRAMEWORK_CLEAN_CMD=""
+
+# shellcheck disable=SC1090
+source "$FRAMEWORKS_DIR/$FRAMEWORK_FILE"
+
+# ─── Determine target directory ─────────────────────────────
+
+PREFIX="${FRAMEWORK_PREFIXES[0]}"
+
 if [ "$IS_PACKAGE" = "--package" ]; then
-  TARGET="packages/${FRAMEWORK}_${APP_NAME}"
+  TARGET="packages/${PREFIX}${APP_NAME}"
 else
-  TARGET="apps/${FRAMEWORK}_${APP_NAME}"
+  TARGET="apps/${PREFIX}${APP_NAME}"
 fi
 
-if [ -d "$TARGET" ]; then
+if [ -d "$REPO_ROOT/$TARGET" ]; then
   echo "Error: $TARGET already exists"
   exit 1
 fi
 
-echo "Creating $TARGET..."
+# ─── Create project ─────────────────────────────────────────
 
-case "$FRAMEWORK" in
-  flutter)
-    if [ "$IS_PACKAGE" = "--package" ]; then
-      flutter create --template=package "$TARGET"
-    else
-      flutter create --org com.example "$TARGET"
-    fi
-    echo "✅ Flutter project created at $TARGET"
-    echo "   Run: cd $TARGET && flutter pub get"
-    ;;
+echo "Creating $TARGET ($FRAMEWORK_NAME)..."
+echo ""
 
-  rn|react-native)
-    if command -v npx &>/dev/null; then
-      npx react-native init "${APP_NAME}" --directory "$TARGET"
-    else
-      echo "Error: npx not found. Install Node.js first."
-      exit 1
-    fi
-    echo "✅ React Native project created at $TARGET"
-    echo "   Run: cd $TARGET && npm install"
-    ;;
+cd "$REPO_ROOT"
 
-  kotlin|kmp)
-    mkdir -p "$TARGET/src/main/kotlin" "$TARGET/src/test/kotlin"
-    cat > "$TARGET/build.gradle.kts" << 'GRADLE'
-plugins {
-    kotlin("jvm") version "1.9.22"
-}
+IS_PKG="false"
+[ "$IS_PACKAGE" = "--package" ] && IS_PKG="true"
 
-group = "com.example"
-version = "1.0-SNAPSHOT"
+scaffold "$TARGET" "$APP_NAME" "$IS_PKG"
 
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    testImplementation(kotlin("test"))
-}
-
-tasks.test {
-    useJUnitPlatform()
-}
-GRADLE
-    echo "✅ Kotlin project created at $TARGET"
-    echo "   Run: cd $TARGET && ./gradlew build"
-    ;;
-
-  swift|ios)
-    mkdir -p "$TARGET/Sources" "$TARGET/Tests"
-    cat > "$TARGET/Package.swift" << SWIFT
-// swift-tools-version: 5.9
-import PackageDescription
-
-let package = Package(
-    name: "${APP_NAME}",
-    platforms: [.iOS(.v16)],
-    products: [
-        .library(name: "${APP_NAME}", targets: ["${APP_NAME}"]),
-    ],
-    targets: [
-        .target(name: "${APP_NAME}"),
-        .testTarget(name: "${APP_NAME}Tests", dependencies: ["${APP_NAME}"]),
-    ]
-)
-SWIFT
-    echo "✅ Swift project created at $TARGET"
-    echo "   Run: cd $TARGET && swift build"
-    ;;
-
-  *)
-    echo "Error: Unknown framework '$FRAMEWORK'"
-    echo "Supported: flutter, rn, kotlin, swift"
-    exit 1
-    ;;
-esac
-
+echo ""
+echo "Created $TARGET ($FRAMEWORK_NAME)"
 echo ""
 echo "Next steps:"
 echo "  1. cd $TARGET"
-echo "  2. Start developing"
-echo "  3. CI will auto-detect the new project on your next PR"
+if [ -n "$FRAMEWORK_INSTALL_CMD" ]; then
+  echo "  2. $FRAMEWORK_INSTALL_CMD"
+  echo "  3. Start developing"
+else
+  echo "  2. Start developing"
+fi
+echo ""
+echo "CI will auto-detect the new project on your next PR."
