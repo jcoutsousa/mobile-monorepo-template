@@ -42,13 +42,13 @@ test: ## Run tests for all detected apps
 	@for dir in apps/*/; do \
 		if [ -f "$$dir/pubspec.yaml" ]; then \
 			echo "── Flutter: $$dir"; \
-			(cd "$$dir" && flutter test) || true; \
+			if [ -n "$$ALLOW_FAILURES" ]; then (cd "$$dir" && flutter test) || true; else (cd "$$dir" && flutter test); fi; \
 		elif [ -f "$$dir/package.json" ]; then \
 			echo "── React Native: $$dir"; \
-			(cd "$$dir" && npm test -- --watchAll=false) || true; \
+			if [ -n "$$ALLOW_FAILURES" ]; then (cd "$$dir" && npm test -- --watchAll=false) || true; else (cd "$$dir" && npm test -- --watchAll=false); fi; \
 		elif [ -f "$$dir/build.gradle.kts" ] || [ -f "$$dir/build.gradle" ]; then \
 			echo "── Kotlin: $$dir"; \
-			(cd "$$dir" && ./gradlew test) || true; \
+			if [ -n "$$ALLOW_FAILURES" ]; then (cd "$$dir" && ./gradlew test) || true; else (cd "$$dir" && ./gradlew test); fi; \
 		fi; \
 	done
 

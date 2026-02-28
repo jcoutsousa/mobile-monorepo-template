@@ -76,8 +76,7 @@ jobs:
             findings=$(grep -cE "^[│|]" trivy-secret-results.txt 2>/dev/null) || findings=0
             if [ "$findings" -gt 2 ]; then
               echo "has_secrets=true" >> "$GITHUB_OUTPUT"
-              echo "::error::Hardcoded secrets detected!"
-              cat trivy-secret-results.txt
+              echo "::error::Hardcoded secrets detected! Review the Security tab (SARIF results) for details."
             else
               echo "has_secrets=false" >> "$GITHUB_OUTPUT"
               echo "No hardcoded secrets found"
