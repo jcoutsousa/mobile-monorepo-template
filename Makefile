@@ -1,7 +1,7 @@
 # ─── Mobile Monorepo Makefile ─────────────────────────────────
 # Auto-detects apps and runs the appropriate tools per framework.
 
-.PHONY: help bootstrap-flutter bootstrap-rn bootstrap-kotlin setup-protection lint test clean
+.PHONY: help bootstrap-flutter bootstrap-rn bootstrap-kotlin bootstrap-package setup-protection lint test format clean
 
 # ─── Default ──────────────────────────────────────────────────
 help: ## Show this help
