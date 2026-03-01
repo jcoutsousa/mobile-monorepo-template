@@ -1,0 +1,69 @@
+# =============================================================================
+# Dev Environment — example configuration
+# Copy this file to terraform.tfvars and fill in your values.
+# =============================================================================
+
+# --- Core Configuration ---
+project_id   = "my-app-dev-123456"        # Your GCP project ID
+project_name = "my-app"                    # Used in resource naming (lowercase, hyphens only)
+region       = "europe-west1"              # GCP region
+
+# --- GitHub Actions Integration ---
+enable_wif        = true                           # Enable keyless auth for GitHub Actions
+github_repository = "your-org/your-repo"           # GitHub repo for WIF attribute condition
+
+# --- Budget ---
+billing_account_id = ""                            # Billing account ID (XXXXXX-XXXXXX-XXXXXX), leave empty to skip
+budget_amount      = 50                            # Monthly budget in EUR
+
+# --- Firebase ---
+enable_firebase = true
+
+android_apps = {
+  "main" = {
+    display_name = "My App (Dev)"
+    package_name = "com.example.myapp.dev"
+  }
+}
+
+ios_apps = {
+  "main" = {
+    display_name = "My App (Dev)"
+    bundle_id    = "com.example.myapp.dev"
+  }
+}
+
+# --- Artifact Registries ---
+# enable_npm_registry    = true   # Uncomment for React Native projects
+# enable_python_registry = true   # Uncomment for Python backend projects
+# enable_maven_registry  = true   # Uncomment for Kotlin/Java projects
+
+# --- Cloud Run Backend Services ---
+# cloud_run_services = {
+#   "api" = {
+#     image                 = "europe-west1-docker.pkg.dev/my-app-dev-123456/my-app-docker/api:latest"
+#     health_check_path     = "/health"
+#     allow_unauthenticated = false
+#     env_vars = {
+#       ENVIRONMENT = "development"
+#     }
+#   }
+# }
+
+# --- Secrets ---
+# secrets = {
+#   "api-key" = {
+#     accessor_members = ["serviceAccount:cloud-run-sa@my-app-dev-123456.iam.gserviceaccount.com"]
+#   }
+# }
+
+# --- Monitoring ---
+alert_emails = []                                  # ["team@example.com"]
+
+# uptime_checks = {
+#   "api" = {
+#     display_name = "API Health"
+#     host         = "api.example.com"
+#     path         = "/api/health"
+#   }
+# }
