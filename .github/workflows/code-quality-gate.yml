@@ -82,7 +82,7 @@ jobs:
       - name: ESLint check
         if: steps.changed.outputs.has_ts != '0' || steps.changed.outputs.has_vue != '0' || steps.changed.outputs.has_svelte != '0'
         run: |
-          for dir in $(find apps packages web -maxdepth 1 \( -name "rn_*" -o -name "react_native_*" \) 2>/dev/null; find web -maxdepth 1 -mindepth 1 -type d 2>/dev/null); do
+          for dir in $(find apps packages -maxdepth 1 \( -name "rn_*" -o -name "react_native_*" \) 2>/dev/null; find web backends -maxdepth 1 -mindepth 1 -type d 2>/dev/null); do
             if [ -f "$dir/package.json" ]; then
               echo "::group::Linting $dir"
               cd $dir && npm ci && npx eslint . --max-warnings 0 && cd -

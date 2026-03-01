@@ -33,6 +33,7 @@ jobs:
               - 'packages/dart_*/**'
             react-native:
               - 'apps/rn_*/**'
+              - 'apps/react-native_*/**'
               - 'apps/react_native_*/**'
               - 'packages/rn_*/**'
             kotlin:
@@ -46,8 +47,13 @@ jobs:
               - 'packages/swift_*/**'
             web:
               - 'web/**'
+              - 'packages/node_*/**'
             backend:
               - 'backends/**'
+              - 'packages/python_*/**'
+              - 'packages/go_*/**'
+              - 'packages/rust_*/**'
+              - 'packages/node_*/**'
 
   # ─── Flutter CI ────────────────────────────────────────────
   flutter-ci:
@@ -339,8 +345,8 @@ jobs:
         run: |
           results="${{ needs.flutter-ci.result }} ${{ needs.react-native-ci.result }} ${{ needs.kotlin-ci.result }} ${{ needs.swift-ci.result }} ${{ needs.web-ci.result }} ${{ needs.backend-ci.result }}"
           for result in $results; do
-            if [[ "$result" == "failure" ]]; then
-              echo "::error::One or more CI jobs failed"
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::One or more CI jobs failed or were cancelled (got: $result)"
               exit 1
             fi
           done

@@ -1,5 +1,5 @@
 # ─── Monorepo Makefile ────────────────────────────────────────
-# Auto-detects projects across apps/, web/, backends/ and runs
+# Auto-detects projects across apps/, packages/, web/, backends/ and runs
 # the appropriate tools per framework.
 
 .PHONY: help \
@@ -21,7 +21,7 @@ endef
 # The body of each action is defined in the per-target recipes below
 # via the _dispatch_* functions.
 
-SCAN_DIRS := apps web backends
+SCAN_DIRS := apps packages web backends
 
 # ─── Default ─────────────────────────────────────────────────
 help: ## Show this help

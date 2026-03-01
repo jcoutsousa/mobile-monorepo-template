@@ -455,7 +455,9 @@ IGNORE
     fi
 
     # Add a Dockerfile alongside the cargo scaffold
-    cat > "$TARGET/Dockerfile" << 'DOCKERFILE'
+    # Determine the binary name (cargo init uses the directory basename)
+    RUST_BIN_NAME="$(basename "$TARGET")"
+    cat > "$TARGET/Dockerfile" << DOCKERFILE
 # ── Build stage ───────────────────────────────────────────────
 FROM rust:1.76-alpine AS builder
 RUN apk add --no-cache musl-dev
@@ -469,10 +471,10 @@ RUN cargo build --release
 # ── Runtime stage ─────────────────────────────────────────────
 FROM alpine:3.19
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-COPY --from=builder /app/target/release/* /usr/local/bin/
+COPY --from=builder /app/target/release/${RUST_BIN_NAME} /usr/local/bin/server
 USER appuser
 EXPOSE 8080
-CMD ["/usr/local/bin/app"]
+CMD ["/usr/local/bin/server"]
 DOCKERFILE
 
     cat > "$TARGET/.dockerignore" << 'IGNORE'
