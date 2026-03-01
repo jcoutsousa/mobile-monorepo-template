@@ -1,12 +1,12 @@
 ---
 name: Feature Request
-about: Suggest a new feature for one of the mobile apps
+about: Suggest a new feature for one of the apps or services
 title: "[FEATURE] "
 labels: enhancement
 ---
 
-## App
-<!-- Which app should this feature be added to? -->
+## Project
+<!-- Which app/service should this feature be added to? (e.g., apps/flutter_myapp, web/react_dashboard, backends/python_api) -->
 
 ## Problem
 <!-- What problem does this solve? -->

@@ -1,6 +1,6 @@
-# Terraform — GCP Infrastructure for Mobile Monorepo
+# Terraform — GCP Infrastructure
 
-Modular Terraform configuration for deploying GCP infrastructure to support mobile apps (Flutter, React Native, Kotlin) with backend services.
+Modular Terraform configuration for deploying GCP infrastructure to support mobile, web, and backend services in the monorepo.
 
 ## Architecture
 
@@ -127,7 +127,7 @@ Enables required GCP APIs and creates billing budgets with alert thresholds.
 
 ### firebase
 
-Configures Firebase project, registers mobile apps, sets up Firestore and Authentication.
+Configures Firebase project, registers apps (Android, iOS, web), sets up Firestore and Authentication.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
