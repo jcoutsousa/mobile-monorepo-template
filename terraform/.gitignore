@@ -1,0 +1,19 @@
+# Terraform state (stored in GCS, not in git)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Sensitive variable files (use .example files as templates)
+terraform.tfvars
+*.auto.tfvars
+
+# Backend config (generated from backend.tf.example)
+backend.tf
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Plan files
+*.tfplan

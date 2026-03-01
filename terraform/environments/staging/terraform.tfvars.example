@@ -1,0 +1,31 @@
+# =============================================================================
+# Staging Environment — mirrors production with reduced resources
+# =============================================================================
+
+project_id   = "my-app-staging-123456"
+project_name = "my-app"
+region       = "europe-west1"
+
+enable_wif        = true
+github_repository = "your-org/your-repo"
+
+billing_account_id = ""
+budget_amount      = 150
+
+enable_firebase = true
+
+android_apps = {
+  "main" = {
+    display_name = "My App (Staging)"
+    package_name = "com.example.myapp.staging"
+  }
+}
+
+ios_apps = {
+  "main" = {
+    display_name = "My App (Staging)"
+    bundle_id    = "com.example.myapp.staging"
+  }
+}
+
+alert_emails = []   # ["team@example.com"]

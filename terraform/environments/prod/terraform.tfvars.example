@@ -1,0 +1,59 @@
+# =============================================================================
+# Production Environment — HA configuration
+# =============================================================================
+
+project_id   = "my-app-prod-123456"
+project_name = "my-app"
+region       = "europe-west1"
+
+enable_wif        = true
+github_repository = "your-org/your-repo"
+
+billing_account_id = ""                            # REQUIRED for production
+budget_amount      = 500
+
+enable_firebase = true
+
+android_apps = {
+  "main" = {
+    display_name = "My App"
+    package_name = "com.example.myapp"
+  }
+}
+
+ios_apps = {
+  "main" = {
+    display_name = "My App"
+    bundle_id    = "com.example.myapp"
+    # app_store_id = "123456789"                   # Uncomment after App Store submission
+  }
+}
+
+# --- Cloud Run (production: always-on, more resources) ---
+# cloud_run_services = {
+#   "api" = {
+#     image                 = "europe-west1-docker.pkg.dev/my-app-prod-123456/my-app-docker/api:latest"
+#     cpu                   = "2"
+#     memory                = "1Gi"
+#     min_instances         = 1                    # Always warm — no cold starts
+#     max_instances         = 20
+#     health_check_path     = "/health"
+#     allow_unauthenticated = false
+#     custom_domain         = "api.example.com"
+#     env_vars = {
+#       ENVIRONMENT = "production"
+#     }
+#   }
+# }
+
+# --- Monitoring (required for production) ---
+alert_emails = ["team@example.com", "oncall@example.com"]
+
+uptime_checks = {
+  "api" = {
+    display_name = "API Health"
+    host         = "api.example.com"
+    path         = "/api/health"
+    period       = "60s"                           # Check every minute in prod
+  }
+}

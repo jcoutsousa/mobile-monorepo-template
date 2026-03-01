@@ -1,0 +1,12 @@
+# =============================================================================
+# Remote State Backend — copy this file to backend.tf and fill in values
+# =============================================================================
+# The GCS bucket must be created BEFORE running terraform init.
+# See README.md for bootstrap instructions.
+
+terraform {
+  backend "gcs" {
+    bucket = "YOUR_PROJECT_NAME-terraform-state"   # e.g., "my-app-terraform-state"
+    prefix = "env/YOUR_ENVIRONMENT"                 # e.g., "env/dev", "env/staging", "env/prod"
+  }
+}
