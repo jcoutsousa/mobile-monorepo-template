@@ -37,6 +37,7 @@ gh api repos/$REPO/rulesets \
   --field 'rules[1][parameters][required_status_checks][][context]=Code Quality Sweep' \
   --field 'rules[1][parameters][required_status_checks][][context]=Security Scan' \
   --field 'rules[1][parameters][required_status_checks][][context]=Copilot Review Status' \
+  --field 'rules[1][parameters][required_status_checks][][context]=Terraform Gate' \
   --field 'rules[][type]=deletion' \
   --field 'rules[][type]=non_fast_forward' \
   2>/dev/null && echo "✅ Ruleset created" || echo "⚠️  Ruleset creation via API failed — set up manually (see below)"
@@ -65,6 +66,7 @@ echo "        • CI Gate"
 echo "        • Code Quality Sweep"
 echo "        • Security Scan"
 echo "        • Copilot Review Status"
+echo "        • Terraform Gate"
 echo "   ✅ Block force pushes"
 echo ""
 echo "4. Enable Copilot auto-review:"

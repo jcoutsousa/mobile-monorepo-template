@@ -77,7 +77,7 @@ module "iam" {
       display_name = "GitHub Actions CI/CD"
       description  = "Service account for GitHub Actions deployments"
       roles = [
-        "roles/run.admin",
+        "roles/run.developer",
         "roles/artifactregistry.writer",
         "roles/iam.serviceAccountUser",
         "roles/secretmanager.secretAccessor",
