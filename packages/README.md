@@ -2,6 +2,8 @@
 
 Shared libraries and utilities used across multiple apps.
 
+This directory holds shared code for mobile apps. Web and backend shared code may also live here when it needs to be consumed across multiple projects in the monorepo.
+
 ## Naming Convention
 
 Same prefix convention as `apps/`:
@@ -23,5 +25,5 @@ Same prefix convention as `apps/`:
 ## Guidelines
 
 - Packages must not depend on app-specific code.
-- Keep packages focused — one responsibility per package.
+- Keep packages focused -- one responsibility per package.
 - All packages must have tests.

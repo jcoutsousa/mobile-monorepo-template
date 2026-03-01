@@ -9,6 +9,18 @@
 │   ├── kotlin_<name>/       # Kotlin/KMP apps
 │   └── ios_<name>/          # Swift/iOS apps
 │
+├── web/                     # Web applications
+│   ├── react_<name>/        # React apps
+│   ├── vue_<name>/          # Vue.js apps
+│   ├── nextjs_<name>/       # Next.js apps
+│   └── angular_<name>/      # Angular apps
+│
+├── backends/                # Backend services
+│   ├── node_<name>/         # Node.js services
+│   ├── python_<name>/       # Python services
+│   ├── go_<name>/           # Go services
+│   └── rust_<name>/         # Rust services
+│
 ├── packages/                # Shared libraries
 │   ├── flutter_<name>/      # Dart/Flutter packages
 │   ├── rn_<name>/           # JS/TS shared packages
@@ -33,6 +45,8 @@
 
 ## Naming Conventions
 
+### Mobile (`apps/`)
+
 | Prefix | Framework | Example |
 |--------|-----------|---------|
 | `flutter_` | Flutter/Dart | `apps/flutter_myapp` |
@@ -44,24 +58,44 @@
 | `ios_` | Swift/iOS native | `apps/ios_myapp` |
 | `swift_` | Swift (non-iOS) | `packages/swift_utils` |
 
+### Web (`web/`)
+
+| Prefix | Framework | Example |
+|--------|-----------|---------|
+| `react_` | React | `web/react_myapp` |
+| `vue_` | Vue.js | `web/vue_myapp` |
+| `nextjs_` | Next.js | `web/nextjs_myapp` |
+| `angular_` | Angular | `web/angular_myapp` |
+
+### Backends (`backends/`)
+
+| Prefix | Stack | Example |
+|--------|-------|---------|
+| `node_` | Node.js | `backends/node_api` |
+| `python_` | Python | `backends/python_api` |
+| `go_` | Go | `backends/go_api` |
+| `rust_` | Rust | `backends/rust_api` |
+
 The CI pipeline uses these prefixes to auto-detect frameworks and run the appropriate tools.
 
 ## Quality Gates
 
 Every PR must pass before merge:
 
-1. **CI Gate** — Framework-specific lint, analyze, and test
-2. **Code Quality Gate** — Automated quality checks (duplicates, dead code, secrets)
-3. **Copilot Review** — AI-powered code review with custom instructions
-4. **AI Compliance Gate** — EU AI Act checks (only for AI components)
+1. **CI Gate** -- Framework-specific lint, analyze, and test
+2. **Code Quality Gate** -- Automated quality checks (duplicates, dead code, secrets)
+3. **Copilot Review** -- AI-powered code review with custom instructions
+4. **AI Compliance Gate** -- EU AI Act checks (only for AI components)
 
 ## Adding a New App
 
 1. Create the app directory with the appropriate prefix:
    ```bash
-   scripts/bootstrap.sh flutter myapp
+   scripts/bootstrap.sh flutter myapp     # Mobile app in apps/
+   scripts/bootstrap.sh react myapp       # Web app in web/
+   scripts/bootstrap.sh python api        # Backend in backends/
    ```
-2. The CI pipeline auto-detects the new app by its prefix.
+2. The CI pipeline auto-detects the new app by its prefix and directory.
 3. No workflow modifications needed.
 
 ## Adding a Shared Package

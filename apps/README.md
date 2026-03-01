@@ -2,6 +2,8 @@
 
 Mobile applications live here. Each app has its own directory with a framework prefix.
 
+This directory is specifically for **mobile** apps (Flutter, React Native, Kotlin, Swift). For web applications, see [`web/`](../web/). For backend services, see [`backends/`](../backends/).
+
 ## Naming Convention
 
 | Prefix | Framework | Example |
@@ -20,4 +22,4 @@ Mobile applications live here. Each app has its own directory with a framework p
 ./scripts/bootstrap.sh kotlin myapp
 ```
 
-CI automatically detects apps by their prefix — no workflow changes needed.
+CI automatically detects apps by their prefix -- no workflow changes needed.

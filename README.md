@@ -1,6 +1,6 @@
-# Mobile Monorepo Template
+# Monorepo Template
 
-Template repository for mobile application development in monorepo architecture. Language-agnostic — supports Flutter, React Native, Kotlin Multiplatform, and Swift.
+Template repository for mobile, web, and backend application development in monorepo architecture. Technology-agnostic — supports Flutter, React Native, Kotlin, Swift, React, Vue, Next.js, Angular, Node.js, Python, Go, and Rust.
 
 Includes automated code quality enforcement and EU AI Act compliance checking via GitHub Copilot custom agents and agentic workflows.
 
@@ -11,18 +11,32 @@ Includes automated code quality enforcement and EU AI Act compliance checking vi
 Click **"Use this template"** on GitHub, or:
 
 ```bash
-gh repo create my-mobile-app --template jcoutsousa/mobile-monorepo-template --private
-cd my-mobile-app
+gh repo create my-project --template jcoutsousa/mobile-monorepo-template --private
+cd my-project
 ```
 
 ### 2. Bootstrap your first app
 
 ```bash
 chmod +x scripts/bootstrap.sh
+
+# Mobile
 ./scripts/bootstrap.sh flutter myapp       # Flutter app
 ./scripts/bootstrap.sh rn myapp            # React Native app
 ./scripts/bootstrap.sh kotlin myapp        # Kotlin app
 ./scripts/bootstrap.sh flutter utils --package  # Shared package
+
+# Web
+./scripts/bootstrap.sh react myapp         # React app
+./scripts/bootstrap.sh vue myapp           # Vue.js app
+./scripts/bootstrap.sh nextjs myapp        # Next.js app
+./scripts/bootstrap.sh angular myapp       # Angular app
+
+# Backend
+./scripts/bootstrap.sh node api            # Node.js backend
+./scripts/bootstrap.sh python api          # Python backend
+./scripts/bootstrap.sh go api              # Go backend
+./scripts/bootstrap.sh rust api            # Rust backend
 ```
 
 ### 3. Set up branch protection
@@ -41,6 +55,18 @@ chmod +x scripts/setup-branch-protection.sh
 │   ├── kotlin_<name>/            # Kotlin/KMP apps
 │   └── ios_<name>/               # Swift/iOS apps
 │
+├── web/                          # Web applications
+│   ├── react_<name>/             # React apps
+│   ├── vue_<name>/               # Vue.js apps
+│   ├── nextjs_<name>/            # Next.js apps
+│   └── angular_<name>/           # Angular apps
+│
+├── backends/                     # Backend services
+│   ├── node_<name>/              # Node.js services
+│   ├── python_<name>/            # Python services
+│   ├── go_<name>/                # Go services
+│   └── rust_<name>/              # Rust services
+│
 ├── packages/                     # Shared libraries
 │
 ├── infrastructure/               # IaC (Terraform, K8s)
@@ -48,7 +74,7 @@ chmod +x scripts/setup-branch-protection.sh
 ├── docs/                         # Documentation
 │
 ├── scripts/                      # Utility scripts
-│   ├── bootstrap.sh              # Create new app/package
+│   ├── bootstrap.sh              # Create new app/package/service
 │   └── setup-branch-protection.sh # Configure GitHub rules
 │
 └── .github/
@@ -60,10 +86,14 @@ chmod +x scripts/setup-branch-protection.sh
     │   ├── flutter.instructions.md
     │   ├── react-native.instructions.md
     │   ├── kotlin.instructions.md
+    │   ├── web.instructions.md
+    │   ├── backend.instructions.md
     │   └── security.instructions.md
     ├── copilot-instructions.md   # Repo-wide review instructions
     └── workflows/
-        ├── ci-mobile.yml         # Auto-detect framework CI
+        ├── ci.yml                # Auto-detect framework CI
+        ├── cd-web.yml            # Web deployment
+        ├── cd-backend.yml        # Backend deployment
         ├── code-quality-gate.yml # Quality checks (required)
         ├── ai-compliance-gate.yml # EU AI Act (conditional)
         ├── copilot-review-gate.yml # Enforce Copilot findings
@@ -90,8 +120,10 @@ Every PR must pass before merge:
 ```
 PR opened/updated
   │
-  ├─→ CI Gate (ci-mobile.yml)
-  │     └─ Auto-detects framework → runs lint + test + analyze
+  ├─→ CI Gate (ci.yml)
+  │     ├─ mobile-ci: Auto-detects framework in apps/ → runs lint + test + analyze
+  │     ├─ web-ci: Auto-detects framework in web/ → runs lint + test + build
+  │     └─ backend-ci: Auto-detects stack in backends/ → runs lint + test + build
   │
   ├─→ Code Quality Gate (code-quality-gate.yml)
   │     └─ Checks: duplicates, dead code, TODOs, framework linters
@@ -123,7 +155,7 @@ Invoked interactively in Copilot Chat:
 @code-quality-sweep run a full sweep
 ```
 
-Performs 6-phase analysis: unused imports → dead code → duplicated constants → duplicated logic → inconsistent patterns → spaghetti code. Creates a branch, makes commits, opens a PR.
+Performs 6-phase analysis: unused imports -> dead code -> duplicated constants -> duplicated logic -> inconsistent patterns -> spaghetti code. Creates a branch, makes commits, opens a PR.
 
 ### EU AI Act Auditor
 
@@ -144,14 +176,16 @@ Language-specific review rules are in `.github/instructions/`:
 | `flutter.instructions.md` | `*.dart` | Widget structure, state management, performance |
 | `react-native.instructions.md` | `*.tsx, *.ts` | Hooks, TypeScript, FlatList, memo |
 | `kotlin.instructions.md` | `*.kt` | Coroutines, Compose, sealed classes |
+| `web.instructions.md` | `*.tsx, *.ts, *.vue` | Components, SSR, routing, state |
+| `backend.instructions.md` | `*.py, *.go, *.rs, *.ts` | API design, error handling, middleware |
 | `security.instructions.md` | All files | Secrets, HTTPS, storage, auth, GDPR |
 
 ## Agentic Workflows (Technical Preview)
 
 Two agentic workflows are included as `.md` files in `.github/workflows/`:
 
-- `code-quality-review.md` — AI-powered quality review on every PR
-- `ai-compliance-review.md` — EU AI Act compliance review on AI-related PRs
+- `code-quality-review.md` -- AI-powered quality review on every PR
+- `ai-compliance-review.md` -- EU AI Act compliance review on AI-related PRs
 
 To compile and activate (requires `gh-aw` extension):
 
@@ -167,8 +201,8 @@ git push
 
 The CI pipeline auto-detects frameworks by directory prefix. To add support for a new framework:
 
-1. Define the prefix convention (e.g., `svelte_` for Svelte Native)
-2. Add a detection filter in `ci-mobile.yml`
+1. Define the prefix convention (e.g., `svelte_` for Svelte)
+2. Add a detection filter in `ci.yml` for the appropriate directory (`apps/`, `web/`, or `backends/`)
 3. Add a CI job for the framework
 4. Add an instructions file in `.github/instructions/`
 5. Update `bootstrap.sh` with the creation command
@@ -176,14 +210,42 @@ The CI pipeline auto-detects frameworks by directory prefix. To add support for 
 ## Makefile Commands
 
 ```bash
-make help              # Show all commands
-make bootstrap-flutter APP=myapp  # Create new Flutter app
-make bootstrap-rn APP=myapp       # Create new React Native app
-make bootstrap-kotlin APP=myapp   # Create new Kotlin app
-make lint              # Run linters for all detected apps
-make test              # Run tests for all detected apps
-make format            # Format code in all detected apps
-make clean             # Clean build artifacts
+make help                        # Show all commands
+
+# Mobile
+make bootstrap-flutter APP=myapp # Create new Flutter app
+make bootstrap-rn APP=myapp      # Create new React Native app
+make bootstrap-kotlin APP=myapp  # Create new Kotlin app
+
+# Web
+make bootstrap-react APP=myapp   # Create new React app
+make bootstrap-vue APP=myapp     # Create new Vue.js app
+make bootstrap-nextjs APP=myapp  # Create new Next.js app
+make bootstrap-angular APP=myapp # Create new Angular app
+
+# Backend
+make bootstrap-node APP=api      # Create new Node.js backend
+make bootstrap-python APP=api    # Create new Python backend
+make bootstrap-go APP=api        # Create new Go backend
+make bootstrap-rust APP=api      # Create new Rust backend
+
+# Quality
+make lint                        # Run linters for all detected apps
+make lint-mobile                 # Run linters for mobile apps only
+make lint-web                    # Run linters for web apps only
+make lint-backend                # Run linters for backends only
+make test                        # Run tests for all detected apps
+make test-mobile                 # Run tests for mobile apps only
+make test-web                    # Run tests for web apps only
+make test-backend                # Run tests for backends only
+make format                      # Format code in all detected apps
+make format-mobile               # Format mobile apps only
+make format-web                  # Format web apps only
+make format-backend              # Format backends only
+make clean                       # Clean build artifacts
+make clean-mobile                # Clean mobile build artifacts
+make clean-web                   # Clean web build artifacts
+make clean-backend               # Clean backend build artifacts
 make setup-protection REPO=owner/repo  # Configure branch protection
 ```
 
@@ -196,8 +258,12 @@ You can copy individual pieces into an existing project:
 cp -r .github/agents/ your-project/.github/
 cp -r .github/skills/ your-project/.github/
 
-# Just the CI workflows
-cp .github/workflows/ci-flutter.yml your-project/.github/workflows/
+# Just the CI workflow
+cp .github/workflows/ci.yml your-project/.github/workflows/
+
+# Just the CD workflows
+cp .github/workflows/cd-web.yml your-project/.github/workflows/
+cp .github/workflows/cd-backend.yml your-project/.github/workflows/
 
 # Just the quality gate
 cp .github/workflows/code-quality-gate.yml your-project/.github/workflows/

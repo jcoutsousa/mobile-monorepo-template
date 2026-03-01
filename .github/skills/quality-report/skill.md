@@ -26,7 +26,7 @@ Gather findings from:
 
 | Metric | How to Calculate |
 |--------|-----------------|
-| Total files scanned | Count all `.dart` files in `lib/` |
+| Total files scanned | Count source files per language (`.dart` in `lib/`, `.py`, `.go`, `.rs`, `.ts`/`.tsx`/`.vue` in `src/`) |
 | Files modified | Count unique files changed across all categories |
 | Lines removed | Sum of all deleted lines (net) |
 | Lines added | Sum of all new lines (shared utilities, constants files) |
@@ -38,8 +38,20 @@ Gather findings from:
 
 | Check | Command | Expected |
 |-------|---------|----------|
-| Static analysis | `flutter analyze` | 0 new issues |
-| Tests | `flutter test` | 0 new failures |
+| Dart analysis | `flutter analyze` | 0 new issues |
+| Dart tests | `flutter test` | 0 new failures |
+| TS/JS linting | `npx eslint .` | 0 new errors |
+| TS/JS tests | `npx jest` | 0 new failures |
+| Kotlin analysis | `./gradlew lint` | 0 new issues |
+| Kotlin tests | `./gradlew test` | 0 new failures |
+| Python linting | `ruff check .` | 0 new issues |
+| Python tests | `pytest` | 0 new failures |
+| Go analysis | `go vet ./...` | 0 new issues |
+| Go tests | `go test ./...` | 0 new failures |
+| Rust analysis | `cargo clippy -- -D warnings` | 0 new warnings |
+| Rust tests | `cargo test` | 0 new failures |
+| Web linting | `npx eslint .` | 0 new errors |
+| Web tests | `npx jest` or `npx vitest run` | 0 new failures |
 | Pre-existing issues | — | Documented, not introduced |
 
 ### Step 4: Generate Report
@@ -65,6 +77,18 @@ Gather findings from:
 |-------|--------|---------|
 | `flutter analyze` | PASS/FAIL | [X] issues (Y pre-existing) |
 | `flutter test` | PASS/FAIL | [X] passed, [Y] failed, [Z] skipped |
+| `npx eslint .` (RN) | PASS/FAIL | [X] errors (Y pre-existing) |
+| `npx jest` (RN) | PASS/FAIL | [X] passed, [Y] failed |
+| `./gradlew lint` | PASS/FAIL | [X] issues (Y pre-existing) |
+| `./gradlew test` | PASS/FAIL | [X] passed, [Y] failed |
+| `ruff check .` | PASS/FAIL | [X] issues (Y pre-existing) |
+| `pytest` | PASS/FAIL | [X] passed, [Y] failed |
+| `go vet ./...` | PASS/FAIL | [X] issues (Y pre-existing) |
+| `go test ./...` | PASS/FAIL | [X] passed, [Y] failed |
+| `cargo clippy` | PASS/FAIL | [X] warnings (Y pre-existing) |
+| `cargo test` | PASS/FAIL | [X] passed, [Y] failed |
+| `npx eslint .` (Web) | PASS/FAIL | [X] errors (Y pre-existing) |
+| `npx jest/vitest` (Web) | PASS/FAIL | [X] passed, [Y] failed |
 
 ### Changes by Category
 
@@ -127,10 +151,37 @@ Gather findings from:
 | 5 | refactor: standardize naming conventions and patterns | [X] | ~[Y] |
 | 6 | refactor: improve code structure and reduce complexity | [X] | +[A]/-[B] |
 
+### Per-Language Metrics
+
+#### Mobile
+| Language | Files Scanned | Files Modified | Lines Removed | Lines Added |
+|----------|--------------|----------------|---------------|-------------|
+| Dart (.dart) | [count] | [count] | [count] | [count] |
+| TypeScript/RN (.ts/.tsx) | [count] | [count] | [count] | [count] |
+| Kotlin (.kt) | [count] | [count] | [count] | [count] |
+
+#### Web
+| Language | Files Scanned | Files Modified | Lines Removed | Lines Added | Bundle Size Delta |
+|----------|--------------|----------------|---------------|-------------|-------------------|
+| React (.tsx) | [count] | [count] | [count] | [count] | [delta] |
+| Vue (.vue) | [count] | [count] | [count] | [count] | [delta] |
+| Angular (.ts) | [count] | [count] | [count] | [count] | [delta] |
+
+#### Backend
+| Language | Files Scanned | Files Modified | Lines Removed | Lines Added |
+|----------|--------------|----------------|---------------|-------------|
+| Python (.py) | [count] | [count] | [count] | [count] |
+| Go (.go) | [count] | [count] | [count] | [count] |
+| Rust (.rs) | [count] | [count] | [count] | [count] |
+
 ### Remaining Items (out of scope)
 
 Items detected but intentionally not fixed:
 - Pre-existing `flutter analyze` warnings: [count]
+- Pre-existing `ruff check` warnings: [count]
+- Pre-existing `go vet` warnings: [count]
+- Pre-existing `cargo clippy` warnings: [count]
+- Pre-existing `eslint` warnings: [count]
 - Test-only symbols (kept for testing): [count]
 - Patterns requiring architectural decisions: [list]
 

@@ -2,10 +2,11 @@
 name: duplicated-constants
 description: >
   Detects hardcoded values and duplicated constants scattered across files in
-  multi-language mobile codebases. Supports Flutter/Dart (Color, EdgeInsets, TextStyle,
-  Duration), React Native/TypeScript (style objects, theme values, API URLs),
-  and Kotlin/Android (color resources, dimension values, string literals).
-  Centralizes values into appropriate constants or theme files per language.
+  multi-language codebases (mobile, web, backend). Supports Flutter/Dart (Color,
+  EdgeInsets, TextStyle, Duration), React Native/TypeScript (style objects, theme values,
+  API URLs), Kotlin/Android (color resources, dimension values, string literals),
+  Python (magic numbers, hardcoded strings), Go (constants), Rust (const values),
+  and web frameworks (CSS values, theme tokens).
 ---
 
 # Duplicated Constants Skill
@@ -20,6 +21,10 @@ Find hardcoded values repeated across files and centralize them into a single so
 | `.ts`, `.tsx` | TypeScript | `constants.ts`, `theme.ts`, `config.ts` |
 | `.js`, `.jsx` | JavaScript | `constants.js`, `theme.js`, `config.js` |
 | `.kt` | Kotlin | `Constants.kt`, `Theme.kt`, `res/values/` |
+| `.py` | Python | `constants.py`, `config.py`, `settings.py` |
+| `.go` | Go | `constants.go`, `config.go` |
+| `.rs` | Rust | `constants.rs`, `config.rs` |
+| `.vue`, `.svelte` | Web | `constants.ts`, `theme.ts`, CSS variables |
 
 ---
 
@@ -243,6 +248,254 @@ tween\(durationMillis\s*=\s*\d+
 
 ---
 
+## Python
+
+### Step 1: Scan for Hardcoded Values
+
+#### Magic Numbers
+```python
+# Numeric literals used in logic (exclude 0, 1, -1 which are idiomatic)
+timeout=\d{2,}
+max_retries\s*=\s*\d+
+limit\s*=\s*\d+
+sleep\(\d+
+range\(\d{2,}
+```
+
+#### Hardcoded Strings
+```python
+# URLs and API paths
+['"]https?://[^\s'"]+['"]
+['"]\/api\/[^\s'"]+['"]
+
+# Email addresses
+['"][a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}['"]
+
+# Environment variable keys
+os\.environ\.get\(['"][^'"]+['"]
+os\.getenv\(['"][^'"]+['"]
+
+# Status codes and error messages
+status_code\s*=\s*\d{3}
+detail\s*=\s*['"][^'"]+['"]
+```
+
+#### Configuration Values
+```python
+# Database URLs, Redis URLs, etc.
+['"]postgresql://
+['"]redis://
+['"]mongodb://
+
+# Repeated settings
+max_length\s*=\s*\d+
+min_length\s*=\s*\d+
+```
+
+### Centralization Targets
+
+| Category | Target File | Pattern |
+|----------|-------------|---------|
+| API URLs | `config.py` or `settings.py` | `BASE_URL = "..."` |
+| Timeouts/retries | `constants.py` | `MAX_RETRIES = 3` |
+| Status messages | `constants.py` | `ERROR_NOT_FOUND = "Resource not found"` |
+| Env var keys | `settings.py` | `DB_HOST_KEY = "DATABASE_HOST"` |
+| Numeric limits | `constants.py` | `MAX_PAGE_SIZE = 100` |
+
+### Validation
+```
+ruff check .   -- no new errors
+pytest         -- all tests pass
+```
+
+---
+
+## Go
+
+### Step 1: Scan for Hardcoded Values
+
+#### Magic Numbers
+```go
+// Numeric literals in logic
+timeout.*\d{2,}
+maxRetries.*=\s*\d+
+time\.(Sleep|After|Tick)\(.*\d+
+make\(\w+,\s*\d{2,}
+```
+
+#### Hardcoded Strings
+```go
+// URLs and paths
+"https?://[^\s"]+
+"/api/[^\s"]+
+
+// Error messages
+errors\.New\("[^"]+"\)
+fmt\.Errorf\("[^"]+
+
+// HTTP headers and content types
+"Content-Type"
+"application/json"
+"Authorization"
+
+// Environment variable keys
+os\.Getenv\("[^"]+"\)
+```
+
+#### Duration Values
+```go
+time\.Duration\(\d+\)
+\d+\s*\*\s*time\.(Second|Millisecond|Minute|Hour)
+```
+
+### Centralization Targets
+
+| Category | Target File | Pattern |
+|----------|-------------|---------|
+| URLs/endpoints | `config/config.go` | `const BaseURL = "..."` |
+| Timeouts/durations | `constants.go` | `const DefaultTimeout = 30 * time.Second` |
+| Error messages | `errors.go` or `constants.go` | `var ErrNotFound = errors.New("not found")` |
+| HTTP constants | `constants.go` | `const ContentTypeJSON = "application/json"` |
+| Env var keys | `config/config.go` | `const EnvDBHost = "DATABASE_HOST"` |
+
+### Validation
+```
+go build ./...    -- compiles successfully
+go vet ./...      -- no new issues
+go test ./...     -- all tests pass
+```
+
+---
+
+## Rust
+
+### Step 1: Scan for Hardcoded Values
+
+#### Magic Numbers
+```rust
+// Numeric literals in logic (exclude 0, 1)
+timeout.*\d{2,}
+max_retries.*=\s*\d+
+capacity.*\d{2,}
+Duration::from_secs\(\d+
+Duration::from_millis\(\d+
+```
+
+#### Hardcoded Strings
+```rust
+// URLs and paths
+"https?://[^\s"]+
+"/api/[^\s"]+
+
+// Error messages
+.expect\("[^"]+"\)
+anyhow!\("[^"]+"\)
+format!\("[^"]+
+
+// Environment variable keys
+std::env::var\("[^"]+"\)
+env::var\("[^"]+"\)
+
+// HTTP constants
+"Content-Type"
+"application/json"
+```
+
+#### Const Values
+```rust
+// Repeated const patterns
+const [A-Z_]+:\s*&str\s*=
+const [A-Z_]+:\s*(u\d+|i\d+|usize|f\d+)\s*=
+```
+
+### Centralization Targets
+
+| Category | Target File | Pattern |
+|----------|-------------|---------|
+| URLs/endpoints | `config.rs` | `pub const BASE_URL: &str = "...";` |
+| Timeouts/durations | `constants.rs` | `pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);` |
+| Error messages | `errors.rs` | Custom error enum or `const` strings |
+| Env var keys | `config.rs` | `pub const ENV_DB_HOST: &str = "DATABASE_HOST";` |
+| Numeric limits | `constants.rs` | `pub const MAX_PAGE_SIZE: usize = 100;` |
+
+### Validation
+```
+cargo check                     -- compiles successfully
+cargo clippy -- -D warnings     -- no new warnings
+cargo test                      -- all tests pass
+```
+
+---
+
+## Web Frameworks (React / Vue / Angular)
+
+### Step 1: Scan for Hardcoded Values
+
+#### CSS / Theme Values
+```
+// Repeated color values in CSS/SCSS/styled-components
+color:\s*#[0-9A-Fa-f]{3,8}
+background:\s*#[0-9A-Fa-f]{3,8}
+border.*#[0-9A-Fa-f]{3,8}
+
+// Repeated spacing values
+padding:\s*\d+px
+margin:\s*\d+px
+gap:\s*\d+px
+
+// Repeated breakpoints
+@media.*\d{3,4}px
+
+// Repeated z-index values
+z-index:\s*\d+
+
+// Repeated font sizes
+font-size:\s*\d+
+```
+
+#### Theme Tokens
+```typescript
+// Inline style objects with repeated values
+style={{ color: '#...', padding: ... }}
+sx={{ color: '#...', p: ... }}  // MUI
+
+// Tailwind repeated custom values (non-standard)
+className=".*\[#[0-9A-Fa-f]+\]"
+```
+
+#### Hardcoded Strings
+Follow the same TypeScript/JavaScript patterns from the React Native section, plus:
+```
+// Route paths
+path:\s*['"][^'"]+['"]
+to:\s*['"][^'"]+['"]
+href:\s*['"][^'"]+['"]
+
+// Local storage keys
+localStorage\.(getItem|setItem)\(['"][^'"]+['"]\)
+sessionStorage\.(getItem|setItem)\(['"][^'"]+['"]\)
+```
+
+### Centralization Targets
+
+| Category | Target File | Pattern |
+|----------|-------------|---------|
+| Colors | `theme/colors.ts` or CSS custom properties | `--color-primary: #1A237E;` or `export const colors = { ... }` |
+| Spacing | `theme/spacing.ts` or CSS custom properties | `--spacing-md: 16px;` or `export const spacing = { ... }` |
+| Breakpoints | `theme/breakpoints.ts` or CSS custom properties | `--bp-tablet: 768px;` |
+| Z-index | `theme/zindex.ts` | `export const zIndex = { modal: 1000, ... }` |
+| Route paths | `routes/paths.ts` | `export const ROUTES = { home: '/', ... }` |
+| Storage keys | `constants/storage.ts` | `export const STORAGE_KEYS = { ... } as const` |
+
+### Validation
+```
+npx eslint . --ext .ts,.tsx,.js,.jsx,.vue  -- no new errors
+npx tsc --noEmit                           -- no type errors
+npx jest --passWithNoTests                 -- all tests pass
+```
+
+---
+
 ## Cross-Language Process
 
 ### Step 2: Group and Categorize (All Languages)
@@ -324,10 +577,47 @@ Run the language-appropriate validation commands listed in each section above.
 |-----------|--------------|-------------|
 | 16.dp | Dimens.SpacingMd | 15 |
 
+### Python -- [service name]
+
+#### Constants Centralized
+| Raw Value | Constant Name | Occurrences | Files |
+|-----------|--------------|-------------|-------|
+| 30 (timeout) | DEFAULT_TIMEOUT | 5 | 3 |
+| "Resource not found" | ERROR_NOT_FOUND | 4 | 3 |
+
+### Go -- [service name]
+
+#### Constants Centralized
+| Raw Value | Constant Name | Occurrences | Files |
+|-----------|--------------|-------------|-------|
+| "application/json" | ContentTypeJSON | 8 | 5 |
+| 30 * time.Second | DefaultTimeout | 4 | 3 |
+
+### Rust -- [service name]
+
+#### Constants Centralized
+| Raw Value | Constant Name | Occurrences | Files |
+|-----------|--------------|-------------|-------|
+| Duration::from_secs(30) | DEFAULT_TIMEOUT | 3 | 2 |
+| "Content-Type" | HEADER_CONTENT_TYPE | 6 | 4 |
+
+### Web (React/Vue/Angular) -- [app name]
+
+#### Theme Values Centralized
+| Raw Value | Constant Name | Occurrences | Files |
+|-----------|--------------|-------------|-------|
+| '#1A237E' | --color-primary / colors.primary | 14 | 9 |
+| '16px' | --spacing-md / spacing.md | 22 | 12 |
+| '768px' | --bp-tablet / breakpoints.tablet | 8 | 6 |
+
 ### Duplicate Definitions Consolidated (All Languages)
 | Constant | Language | Was In | Moved To |
 |----------|----------|--------|----------|
 | supportEmail | Dart | settings_viewmodel.dart, constants.dart | constants.dart only |
 | BASE_URL | TypeScript | api.ts, config.ts | config/api.ts only |
 | AUTH_TOKEN | Kotlin | LoginViewModel.kt, PrefsKeys.kt | PrefsKeys.kt only |
+| MAX_RETRIES | Python | auth_service.py, api_client.py | constants.py only |
+| DefaultTimeout | Go | handlers/user.go, handlers/auth.go | constants.go only |
+| BASE_URL | Rust | handlers/mod.rs, client.rs | config.rs only |
+| colors.primary | Web | Header.tsx, Footer.tsx, theme.ts | theme/colors.ts only |
 ```

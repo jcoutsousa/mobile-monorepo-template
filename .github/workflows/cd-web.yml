@@ -1,0 +1,147 @@
+name: "CD - Web"
+
+# Deploy a web application.
+# Manual trigger with app selection.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App to deploy (directory name under web/)"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: cd-web-${{ github.event.inputs.app }}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  APP_DIR: web/${{ github.event.inputs.app }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    outputs:
+      framework: ${{ steps.detect.outputs.framework }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate app exists
+        run: |
+          if [ ! -d "$APP_DIR" ]; then
+            echo "::error::App directory '$APP_DIR' does not exist"
+            exit 1
+          fi
+
+      - name: Detect framework
+        id: detect
+        run: |
+          if [ ! -f "$APP_DIR/package.json" ]; then
+            echo "::error::No package.json found in $APP_DIR"
+            exit 1
+          fi
+
+          deps=$(cat "$APP_DIR/package.json")
+
+          if echo "$deps" | grep -q '"next"'; then
+            echo "framework=nextjs" >> "$GITHUB_OUTPUT"
+          elif echo "$deps" | grep -q '"@angular/core"'; then
+            echo "framework=angular" >> "$GITHUB_OUTPUT"
+          elif echo "$deps" | grep -q '"vue"'; then
+            echo "framework=vue" >> "$GITHUB_OUTPUT"
+          elif echo "$deps" | grep -q '"react"'; then
+            echo "framework=react" >> "$GITHUB_OUTPUT"
+          else
+            echo "framework=static" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Production guard
+        if: github.event.inputs.environment == 'production' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Production deploys only from main branch"
+          exit 1
+
+  build:
+    name: Build
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ env.APP_DIR }}
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: |
+            ${{ env.APP_DIR }}/dist/
+            ${{ env.APP_DIR }}/build/
+            ${{ env.APP_DIR }}/.next/
+            ${{ env.APP_DIR }}/out/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: ./release
+
+      - name: Deploy
+        run: |
+          echo "=== Deploy Web Application ==="
+          echo "Framework: ${{ needs.validate.outputs.framework }}"
+          echo "App: ${{ github.event.inputs.app }}"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo ""
+          echo "Deployment targets (configure one):"
+          echo "  - Cloud Run (containerized SSR apps)"
+          echo "  - Firebase Hosting (static sites, Next.js SSR)"
+          echo "  - Cloud Storage + CDN (pure static sites)"
+          echo ""
+          echo "Required setup:"
+          echo "  1. Configure WIF auth (see terraform/modules/iam)"
+          echo "  2. Set deployment target in app config"
+          echo ""
+          echo "::error::Web deploy step not implemented. This workflow does not perform a real deployment yet."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Web Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| App | ${{ github.event.inputs.app }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Framework | ${{ needs.validate.outputs.framework }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Environment | ${{ github.event.inputs.environment }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | ${{ github.ref_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Run | #${{ github.run_number }} |" >> "$GITHUB_STEP_SUMMARY"

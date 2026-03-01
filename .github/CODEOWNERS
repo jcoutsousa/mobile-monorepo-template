@@ -1,16 +1,30 @@
 # Default owners for everything
 * @jcoutsousa
 
-# Framework-specific owners (customize per team)
-# apps/flutter_*  @flutter-team
-# apps/rn_*       @react-native-team
-# apps/kotlin_*   @kotlin-team
+# Mobile apps (customize per team)
+# apps/flutter_*    @flutter-team
+# apps/rn_*         @react-native-team
+# apps/kotlin_*     @kotlin-team
+# apps/ios_*        @ios-team
+
+# Web apps (customize per team)
+# web/react_*       @frontend-team
+# web/vue_*         @frontend-team
+# web/nextjs_*      @frontend-team
+# web/angular_*     @frontend-team
+
+# Backend services (customize per team)
+# backends/node_*   @backend-team
+# backends/python_* @backend-team
+# backends/go_*     @backend-team
+# backends/rust_*   @backend-team
 
 # Shared packages require broader review
-# packages/       @platform-leads
+# packages/         @platform-leads
 
 # Infrastructure changes require DevOps review
-# infrastructure/ @devops-team
+# infrastructure/   @devops-team
+# terraform/        @devops-team
 
 # CI/CD and GitHub config
 .github/ @jcoutsousa

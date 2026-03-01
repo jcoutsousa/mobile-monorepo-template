@@ -9,12 +9,16 @@
 - [ ] CI/CD changes
 - [ ] Dependencies update
 
-## App(s) Affected
-- [ ] `apps/flutter_*`
-- [ ] `apps/rn_*`
-- [ ] `apps/kotlin_*`
-- [ ] `packages/*`
-- [ ] `infrastructure/*`
+## Area(s) Affected
+- [ ] `apps/flutter_*` (Flutter mobile)
+- [ ] `apps/rn_*` (React Native mobile)
+- [ ] `apps/kotlin_*` (Kotlin mobile)
+- [ ] `apps/ios_*` (Swift/iOS mobile)
+- [ ] `web/*` (Web applications)
+- [ ] `backends/*` (Backend services)
+- [ ] `packages/*` (Shared libraries)
+- [ ] `terraform/*` (Infrastructure)
+- [ ] `.github/*` (CI/CD & config)
 - [ ] Other: ___
 
 ## Checklist
