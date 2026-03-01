@@ -1,16 +1,44 @@
 # Default owners for everything
 * @jcoutsousa
 
-# Framework-specific owners (customize per team)
-# apps/flutter_*  @flutter-team
-# apps/rn_*       @react-native-team
-# apps/kotlin_*   @kotlin-team
+# ─── Mobile apps (customize per team) ──────────────────────
+# apps/flutter_*       @flutter-team
+# apps/rn_*            @react-native-team
+# apps/kotlin_*        @kotlin-team
+# apps/ios_*           @ios-team
 
-# Shared packages require broader review
-# packages/       @platform-leads
+# ─── Web apps (customize per team) ─────────────────────────
+# web/react_*          @frontend-team
+# web/vue_*            @frontend-team
+# web/nextjs_*         @frontend-team
+# web/angular_*        @frontend-team
 
-# Infrastructure changes require DevOps review
-# infrastructure/ @devops-team
+# ─── Backend services (customize per team) ──────────────────
+# backends/node_*      @backend-team
+# backends/python_*    @backend-team
+# backends/go_*        @backend-team
+# backends/rust_*      @backend-team
 
-# CI/CD and GitHub config
+# ─── Shared packages require broader review ─────────────────
+# packages/            @platform-leads
+
+# ─── Infrastructure changes require DevOps review ───────────
+# infrastructure/      @devops-team
+# terraform/           @devops-team
+
+# ─── CI/CD and GitHub config ────────────────────────────────
 .github/ @jcoutsousa
+
+# ─── Language-specific file ownership ────────────────────────
+# Uncomment and customize these to assign reviewers by file type:
+# *.dart               @flutter-team
+# *.kt                 @kotlin-team
+# *.swift              @ios-team
+# *.tsx                @frontend-team
+# *.ts                 @frontend-team
+# *.vue                @frontend-team
+# *.py                 @backend-team
+# *.go                 @backend-team
+# *.rs                 @backend-team
+# *.tf                 @devops-team
+# Dockerfile           @devops-team

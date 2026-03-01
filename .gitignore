@@ -57,6 +57,30 @@ Thumbs.db
 **/ios/Flutter/flutter_assets/
 **/ios/ServiceDefinitions.json
 
+# ─── Python ────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+**/.venv/
+*.egg-info/
+dist/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# ─── Go ────────────────────────────────────────────────────
+**/vendor/
+
+# ─── Rust ──────────────────────────────────────────────────
+**/target/
+
+# ─── Web builds ───────────────────────────────────────────
+**/.next/
+**/out/
+
 # ─── Secrets ─────────────────────────────────────────────────
 .env
 .env.*

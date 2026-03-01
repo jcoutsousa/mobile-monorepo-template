@@ -1,6 +1,6 @@
-# Copilot Review Instructions — Mobile Monorepo
+# Copilot Review Instructions — Monorepo
 
-You are reviewing code in a mobile monorepo that may contain Flutter, React Native, Kotlin Multiplatform, or Swift projects.
+You are reviewing code in a technology-agnostic monorepo that may contain mobile (Flutter, React Native, Kotlin, Swift), web (React, Vue, Next.js, Angular), and backend (Node.js, Python, Go, Rust) projects.
 
 ## General Rules
 

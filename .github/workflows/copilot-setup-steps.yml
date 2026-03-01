@@ -44,7 +44,7 @@ jobs:
       - name: Detect Node.js apps
         id: detect-node
         run: |
-          if find apps packages -name "package.json" -not -path "*/node_modules/*" 2>/dev/null | head -1 | grep -q .; then
+          if find apps packages web backends -name "package.json" -not -path "*/node_modules/*" 2>/dev/null | head -1 | grep -q .; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
@@ -59,7 +59,7 @@ jobs:
       - name: Install Node dependencies
         if: steps.detect-node.outputs.found == 'true'
         run: |
-          for dir in $(find apps packages -name "package.json" -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null); do
+          for dir in $(find apps packages web backends -name "package.json" -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null); do
             echo "Installing deps: $dir"
             (cd "$dir" && npm ci)
           done
@@ -82,6 +82,78 @@ jobs:
           java-version: 17
           cache: gradle
 
+      # ── Python setup ─────────────────────────────────────────
+      - name: Detect Python projects
+        id: detect-python
+        run: |
+          if find apps packages web backends \( -name "pyproject.toml" -o -name "requirements.txt" \) -not -path "*/node_modules/*" 2>/dev/null | head -1 | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Python
+        if: steps.detect-python.outputs.found == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        if: steps.detect-python.outputs.found == 'true'
+        run: |
+          for dir in $(find apps packages web backends \( -name "pyproject.toml" -o -name "requirements.txt" \) -not -path "*/node_modules/*" -exec dirname {} \; 2>/dev/null | sort -u); do
+            echo "Installing deps: $dir"
+            (cd "$dir" && pip install -e ".[dev]" 2>/dev/null || pip install -r requirements.txt 2>/dev/null || true)
+          done
+
+      # ── Go setup ─────────────────────────────────────────────
+      - name: Detect Go projects
+        id: detect-go
+        run: |
+          if find apps packages web backends -name "go.mod" 2>/dev/null | head -1 | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Go
+        if: steps.detect-go.outputs.found == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install Go dependencies
+        if: steps.detect-go.outputs.found == 'true'
+        run: |
+          for dir in $(find apps packages web backends -name "go.mod" -exec dirname {} \; 2>/dev/null); do
+            echo "Installing deps: $dir"
+            (cd "$dir" && go mod download)
+          done
+
+      # ── Rust setup ───────────────────────────────────────────
+      - name: Detect Rust projects
+        id: detect-rust
+        run: |
+          if find apps packages web backends -name "Cargo.toml" 2>/dev/null | head -1 | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Rust
+        if: steps.detect-rust.outputs.found == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Fetch Rust dependencies
+        if: steps.detect-rust.outputs.found == 'true'
+        run: |
+          for dir in $(find apps packages web backends -name "Cargo.toml" -exec dirname {} \; 2>/dev/null); do
+            echo "Fetching deps: $dir"
+            (cd "$dir" && cargo fetch 2>/dev/null || true)
+          done
+
       # ── Summary ──────────────────────────────────────────────
       - name: Environment summary
         run: |
@@ -92,3 +164,6 @@ jobs:
           echo "| Flutter | ${{ steps.detect-flutter.outputs.found }} | $(flutter --version 2>/dev/null | head -1 || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Node.js | ${{ steps.detect-node.outputs.found }} | $(node --version 2>/dev/null || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
           echo "| JDK | ${{ steps.detect-kotlin.outputs.found }} | $(java --version 2>&1 | head -1 || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Python | ${{ steps.detect-python.outputs.found }} | $(python3 --version 2>/dev/null || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Go | ${{ steps.detect-go.outputs.found }} | $(go version 2>/dev/null || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Rust | ${{ steps.detect-rust.outputs.found }} | $(rustc --version 2>/dev/null || echo 'N/A') |" >> "$GITHUB_STEP_SUMMARY"

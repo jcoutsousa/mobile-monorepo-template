@@ -29,6 +29,11 @@ jobs:
           echo "has_dart=$(echo "$files" | grep -c '\.dart$' || true)" >> $GITHUB_OUTPUT
           echo "has_ts=$(echo "$files" | grep -cE '\.(ts|tsx|js|jsx)$' || true)" >> $GITHUB_OUTPUT
           echo "has_kotlin=$(echo "$files" | grep -cE '\.(kt|kts)$' || true)" >> $GITHUB_OUTPUT
+          echo "has_python=$(echo "$files" | grep -c '\.py$' || true)" >> $GITHUB_OUTPUT
+          echo "has_go=$(echo "$files" | grep -c '\.go$' || true)" >> $GITHUB_OUTPUT
+          echo "has_rust=$(echo "$files" | grep -c '\.rs$' || true)" >> $GITHUB_OUTPUT
+          echo "has_vue=$(echo "$files" | grep -c '\.vue$' || true)" >> $GITHUB_OUTPUT
+          echo "has_svelte=$(echo "$files" | grep -c '\.svelte$' || true)" >> $GITHUB_OUTPUT
 
       # ─── Dart / Flutter checks ───────────────────────────
       - name: Setup Flutter
@@ -67,17 +72,17 @@ jobs:
             echo -e "::warning::Potential unused imports:$violations"
           fi
 
-      # ─── TypeScript / React Native checks ────────────────
+      # ─── TypeScript / React Native / Web checks ─────────
       - name: Setup Node
-        if: steps.changed.outputs.has_ts != '0'
+        if: steps.changed.outputs.has_ts != '0' || steps.changed.outputs.has_vue != '0' || steps.changed.outputs.has_svelte != '0'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: ESLint check
-        if: steps.changed.outputs.has_ts != '0'
+        if: steps.changed.outputs.has_ts != '0' || steps.changed.outputs.has_vue != '0' || steps.changed.outputs.has_svelte != '0'
         run: |
-          for dir in $(find apps packages -maxdepth 1 \( -name "rn_*" -o -name "react_native_*" \) 2>/dev/null); do
+          for dir in $(find apps packages -maxdepth 1 \( -name "rn_*" -o -name "react_native_*" \) 2>/dev/null; find web backends -maxdepth 1 -mindepth 1 -type d 2>/dev/null); do
             if [ -f "$dir/package.json" ]; then
               echo "::group::Linting $dir"
               cd $dir && npm ci && npx eslint . --max-warnings 0 && cd -
@@ -100,6 +105,71 @@ jobs:
             if [ -f "$dir/build.gradle.kts" ] || [ -f "$dir/build.gradle" ]; then
               echo "::group::Detekt $dir"
               cd $dir && ./gradlew detekt 2>/dev/null && cd - || echo "detekt not configured"
+              echo "::endgroup::"
+            fi
+          done
+
+      # ─── Python checks ──────────────────────────────────
+      - name: Setup Python
+        if: steps.changed.outputs.has_python != '0'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python lint (ruff)
+        if: steps.changed.outputs.has_python != '0'
+        run: |
+          pip install ruff
+          # Lint changed Python files and any Python projects in backends/
+          changed_py=$(echo "${{ steps.changed.outputs.files }}" | grep '\.py$' || true)
+          if [ -n "$changed_py" ]; then
+            echo "::group::Ruff check on changed files"
+            echo "$changed_py" | xargs ruff check 2>/dev/null || true
+            echo "::endgroup::"
+          fi
+          for dir in $(find apps packages web backends -maxdepth 1 -mindepth 1 -type d 2>/dev/null); do
+            if [ -f "$dir/pyproject.toml" ] || [ -f "$dir/requirements.txt" ]; then
+              py_files=$(find "$dir" -name "*.py" -not -path "*/.*" 2>/dev/null | head -1)
+              if [ -n "$py_files" ]; then
+                echo "::group::Ruff check $dir"
+                ruff check "$dir" 2>/dev/null || true
+                echo "::endgroup::"
+              fi
+            fi
+          done
+
+      # ─── Go checks ──────────────────────────────────────
+      - name: Setup Go
+        if: steps.changed.outputs.has_go != '0'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Go vet
+        if: steps.changed.outputs.has_go != '0'
+        run: |
+          for dir in $(find apps packages web backends -maxdepth 1 -mindepth 1 -type d 2>/dev/null); do
+            if [ -f "$dir/go.mod" ]; then
+              echo "::group::Go vet $dir"
+              cd $dir && go vet ./... && cd -
+              echo "::endgroup::"
+            fi
+          done
+
+      # ─── Rust checks ────────────────────────────────────
+      - name: Setup Rust
+        if: steps.changed.outputs.has_rust != '0'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cargo clippy
+        if: steps.changed.outputs.has_rust != '0'
+        run: |
+          for dir in $(find apps packages web backends -maxdepth 1 -mindepth 1 -type d 2>/dev/null); do
+            if [ -f "$dir/Cargo.toml" ]; then
+              echo "::group::Clippy $dir"
+              cd $dir && cargo clippy -- -D warnings 2>/dev/null && cd - || echo "clippy check completed with warnings"
               echo "::endgroup::"
             fi
           done

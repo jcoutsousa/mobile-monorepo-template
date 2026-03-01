@@ -1,0 +1,144 @@
+name: "CD - Backend"
+
+# Deploy a backend service to Cloud Run.
+# Manual trigger with service selection.
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to deploy (directory name under backends/)"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+concurrency:
+  group: cd-backend-${{ github.event.inputs.service }}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  SERVICE_DIR: backends/${{ github.event.inputs.service }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    outputs:
+      stack: ${{ steps.detect.outputs.stack }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate service exists
+        run: |
+          if [ ! -d "$SERVICE_DIR" ]; then
+            echo "::error::Service directory '$SERVICE_DIR' does not exist"
+            exit 1
+          fi
+
+      - name: Detect stack
+        id: detect
+        run: |
+          if [ -f "$SERVICE_DIR/package.json" ]; then
+            echo "stack=node" >> "$GITHUB_OUTPUT"
+          elif [ -f "$SERVICE_DIR/pyproject.toml" ] || [ -f "$SERVICE_DIR/requirements.txt" ]; then
+            echo "stack=python" >> "$GITHUB_OUTPUT"
+          elif [ -f "$SERVICE_DIR/go.mod" ]; then
+            echo "stack=go" >> "$GITHUB_OUTPUT"
+          elif [ -f "$SERVICE_DIR/Cargo.toml" ]; then
+            echo "stack=rust" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Cannot detect backend stack for $SERVICE_DIR"
+            exit 1
+          fi
+
+      - name: Production guard
+        if: github.event.inputs.environment == 'production' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Production deploys only from main branch"
+          exit 1
+
+  build-and-push:
+    name: Build & Push Image
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.DOCKER_REGISTRY }}/${{ github.event.inputs.service }}"
+          TAG="${{ github.sha }}"
+
+          docker build \
+            --platform linux/amd64 \
+            -t "${IMAGE}:${TAG}" \
+            -t "${IMAGE}:latest" \
+            "$SERVICE_DIR"
+
+          echo "=== Push Docker Image ==="
+          echo "Image: ${IMAGE}:${TAG}"
+          echo ""
+          echo "::error::Docker push not implemented. Configure Artifact Registry and WIF first."
+          echo "Required GitHub variables:"
+          echo "  - WIF_PROVIDER (from terraform output)"
+          echo "  - GCP_SERVICE_ACCOUNT (from terraform output)"
+          echo "  - GCP_PROJECT_ID"
+          echo "  - GCP_REGION"
+          echo "  - DOCKER_REGISTRY"
+          exit 1
+
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    needs: [validate, build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Cloud Run
+        run: |
+          echo "=== Deploy Backend to Cloud Run ==="
+          echo "Service: ${{ github.event.inputs.service }}"
+          echo "Stack: ${{ needs.validate.outputs.stack }}"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo ""
+          echo "Required setup:"
+          echo "  1. Apply terraform for the target environment"
+          echo "  2. Configure WIF auth (terraform/modules/iam)"
+          echo "  3. Set GitHub variables: WIF_PROVIDER, GCP_SERVICE_ACCOUNT, GCP_PROJECT_ID, GCP_REGION"
+          echo ""
+          echo "::error::Backend deploy step not implemented. This workflow does not perform a real deployment yet."
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Backend Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Service | ${{ github.event.inputs.service }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Stack | ${{ needs.validate.outputs.stack }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Environment | ${{ github.event.inputs.environment }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Branch | ${{ github.ref_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Run | #${{ github.run_number }} |" >> "$GITHUB_STEP_SUMMARY"
